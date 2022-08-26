@@ -144,6 +144,12 @@ void Vec3f_mulByFloat(Vec3f *v, float f){
 	v->z *= f;
 }
 
+void Vec3f_mulByVec3f(Vec3f *v1, Vec3f v2){
+	v1->x *= v2.x;
+	v1->y *= v2.y;
+	v1->z *= v2.z;
+}
+
 void Vec3f_divByFloat(Vec3f *v, float x){
 	v->x /= x;
 	v->y /= x;
@@ -467,5 +473,26 @@ Mat4f getPerspectiveMat4f(float fov, float aspectRatio, float far, float near){
 
 	return perspectiveMat4f;
 
+
+}
+
+Mat4f getLookAtMat4f(Vec3f pos, Vec3f direction){
+
+	Vec3f right = getCrossVec3f(getVec3f(0.0, 1.0, 0.0), direction);
+	Vec3f up = getCrossVec3f(direction, right);
+
+	Vec3f_normalize(&right);
+	Vec3f_normalize(&up);
+
+	Mat4f lookAtMat4f = { 
+		right.x,	 right.y, 	  right.z, 	   0.0,
+		up.x, 	   	 up.y, 		  up.z, 	   0.0,
+		direction.x, direction.y, direction.z, 0.0,
+		0.0, 		 0.0,  		  0.0, 		   1.0,
+	};
+
+	Mat4f_mulByMat4f(&lookAtMat4f, getTranslationMat4f(-pos.x, -pos.y, -pos.z));
+
+	return lookAtMat4f;
 
 }

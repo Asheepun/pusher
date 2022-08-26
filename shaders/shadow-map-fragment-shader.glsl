@@ -6,8 +6,8 @@ out vec4 FragColor;
 
 uniform mat4 modelMatrix;
 uniform mat4 modelRotationMatrix;
-uniform mat4 cameraMatrix;
 uniform mat4 perspectiveMatrix;
+uniform mat4 lightMatrix;
 
 uniform vec3 lightPos;
 
@@ -21,9 +21,9 @@ void main(){
 
 	vec4 modelNormal = normal * modelRotationMatrix;
 	vec4 modelPosition = position * modelRotationMatrix * modelMatrix;
-	vec4 projectedPosition = position * modelRotationMatrix * modelMatrix * perspectiveMatrix;
+	vec4 projectedPosition = position * modelRotationMatrix * modelMatrix * lightMatrix * perspectiveMatrix;
 
-	float depth = 1 - 1 / projectedPosition.z;
+	float depth = abs(projectedPosition.z / 100);
 
 	gl_FragDepth = depth;
 

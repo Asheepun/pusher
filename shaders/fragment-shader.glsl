@@ -10,6 +10,7 @@ uniform mat4 modelMatrix;
 uniform mat4 modelRotationMatrix;
 uniform mat4 cameraMatrix;
 uniform mat4 perspectiveMatrix;
+uniform mat4 lightMatrix;
 
 uniform vec3 lightPos;
 
@@ -24,22 +25,25 @@ void main(){
 	vec4 modelNormal = normal * modelRotationMatrix;
 	vec4 modelPosition = position * modelRotationMatrix * modelMatrix;
 	vec4 projectedPosition = position * modelRotationMatrix * modelMatrix * cameraMatrix * perspectiveMatrix;
-	vec4 lightProjectedPosition = position * modelRotationMatrix * modelMatrix * perspectiveMatrix;
+	vec4 lightProjectedPosition = position * modelRotationMatrix * modelMatrix * lightMatrix * perspectiveMatrix;
 
 	projectedPosition.x /= projectedPosition.w;
 	projectedPosition.y /= projectedPosition.w;
 
+	//lightProjectedPosition.y /= lightProjectedPosition.w;
+	//lightProjectedPosition.y /= lightProjectedPosition.w;
+
 	vec3 color = vec3(1.0, 1.0, 1.0);
 
-	float depth = 1 - 1 / projectedPosition.z;
+	float depth = abs(projectedPosition.z / 100);
 
-	float shadowMapDepth = texture(shadowMapTexture, vec2(0.5, 0.5) + lightProjectedPosition.xy / 10).x;
-	float shadowDepth = 1 - 1 / length(modelPosition.xyz - lightPos);
+	float shadowMapDepth = texture(shadowMapTexture, vec2(0.5, 0.5) + lightProjectedPosition.xy / lightProjectedPosition.w / 2).x;
+	float shadowDepth = lightProjectedPosition.z / 100;
 	//float shadowMapDepth = texture(shadowMapTexture, gl_FragCoord.xy).x;
 
 	float diffuseLight = abs(dot(normalize(lightPos - modelPosition.xyz), normalize(modelNormal.xyz)));
 
-	if(shadowDepth - 0.05 > shadowMapDepth
+	if(shadowDepth - 0.001 > shadowMapDepth
 	|| dot(normalize(modelNormal.xyz), normalize(modelPosition.xyz - lightPos)) > 0){
 		diffuseLight = 0.0;
 	}

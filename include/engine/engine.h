@@ -88,6 +88,7 @@ typedef struct Engine_Key{
 
 typedef struct Engine_Pointer{
 	Vec2f pos;
+	Vec2f movement;
 	Vec2f lastDownedPos;
 	Vec2f lastUppedPos;
 	bool down;

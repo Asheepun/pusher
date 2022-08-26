@@ -18,6 +18,7 @@
 
 #include "X11/X.h"
 #include "X11/Xlib.h"
+#include "X11/extensions/Xfixes.h"
 #include "X11/XKBlib.h"
 #include <X11/Xutil.h>
 #include "GL/glx.h"
@@ -425,8 +426,26 @@ int main(){
 
 				Engine_pointer.pos.x = motionEvent_p->x;
 				Engine_pointer.pos.y = motionEvent_p->y;
+
+				{
+					Engine_pointer.movement.x = motionEvent_p->x - Engine_clientWidth / 2;
+					Engine_pointer.movement.y = motionEvent_p->y - Engine_clientHeight / 2;
+				}
 			}
 		
+		}
+
+		//do fps magic
+
+		{
+			int screenWidth = DisplayWidth(dpy, DefaultScreen(dpy));
+			int screenHeight = DisplayHeight(dpy, DefaultScreen(dpy));
+
+			XWarpPointer(dpy, None, root, 0, 0, 0, 0, screenWidth / 2, screenHeight / 2);
+
+			XFixesHideCursor(dpy, root);
+			XFlush(dpy);
+
 		}
 
 		//update

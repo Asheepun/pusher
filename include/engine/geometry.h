@@ -83,6 +83,8 @@ void Vec3f_sub(Vec3f *, Vec3f);
 
 void Vec3f_mulByFloat(Vec3f *, float);
 
+void Vec3f_mulByVec3f(Vec3f *, Vec3f);
+
 void Vec3f_divByFloat(Vec3f *, float);
 
 void Vec3f_normalize(Vec3f *);
@@ -138,5 +140,7 @@ Mat4f getTranslationMat4f(float, float, float);
 Mat4f getScalingMat4f(float);
 
 Mat4f getPerspectiveMat4f(float, float, float, float);
+
+Mat4f getLookAtMat4f(Vec3f, Vec3f);
 
 #endif

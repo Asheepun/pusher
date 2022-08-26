@@ -9,6 +9,7 @@ uniform mat4 modelMatrix;
 uniform mat4 modelRotationMatrix;
 uniform mat4 cameraMatrix;
 uniform mat4 perspectiveMatrix;
+uniform mat4 lightMatrix;
 
 void main(){
 

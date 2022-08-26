@@ -2,16 +2,26 @@
 #include "engine/array.h"
 #include "engine/files.h"
 #include "engine/shaders.h"
-
-#include "glad/wgl.h"
-#include "glad/gl.h"
+#include "engine/3d.h"
 
 #include "stdio.h"
 #include "math.h"
 #include "string.h"
 
+enum EntityType{
+	ENTITY_TYPE_PLAYER,
+	ENTITY_TYPE_OBSTACLE,
+};
+
 int WIDTH = 1920;
 int HEIGHT = 1080;
+
+float PLAYER_WALK_SPEED = 0.10;
+float PLAYER_GROUND_RESISTANCE = 0.9;
+float PLAYER_JUMP_SPEED = 0.5;
+float PLAYER_GRAVITY = 0.03;
+
+float CAMERA_MOVEMENT_SCALE = 0.0015;
 
 float triangleVertices[] = {
 	-1.0, -1.0, 0.0, 	0.0, 0.0, 1.0,
@@ -19,20 +29,22 @@ float triangleVertices[] = {
 	1.0, -1.0, 0.0, 	0.0, 0.0, 1.0,
 };
 
-typedef struct Face{
-	unsigned int indices[3];
-}Face;
-
 typedef struct Entity{
 	float scale;
 	Vec3f pos;
+	Vec3f velocity;
+	Vec3f acceleration;
+	Vec3f resistance;
 	Vec3f rotation;
+	bool onGround;
+	Model model;
+	enum EntityType type;
 }Entity;
 
-unsigned int triangleVBO;
+Model teapotModel;
+Model boxModel;
 
-unsigned int VBO;
-unsigned int VAO;
+unsigned int triangleVBO;
 
 unsigned int shadowMapFBO;
 unsigned int shadowMapTexture;
@@ -52,8 +64,6 @@ float near = 0.1;
 Vec3f cameraPos;
 Vec3f cameraRotation;
 Vec3f cameraDirection;
-Vec3f cameraUp;
-Vec3f cameraRight;
 
 Vec3f lightPos;
 Vec3f lightDirection;
@@ -66,104 +76,18 @@ void Engine_start(){
 
 	Engine_centerWindow();
 
-	//read model
-	{
-		long int fileSize;
-		char *data = getFileData_mustFree("assets/models/teapot.obj", &fileSize);
-
-		Array vertices;
-		Array faces;
-
-		Array_init(&vertices, sizeof(Vec3f));
-		Array_init(&faces, sizeof(Face));
-
-		for(int i = 0; i < fileSize; i++){
-
-			if(data[i] == *"v"){
-
-				Vec3f *vertex_p = Array_addItem(&vertices);
-
-				char *next_p;
-
-				vertex_p->x = strtof(data + i + 1, &next_p);
-				vertex_p->y = strtof(next_p + 1, &next_p);
-				vertex_p->z = strtof(next_p + 1, &next_p);
-
-			}
-
-			if(data[i] == *"f"){
-
-				Face *face_p = Array_addItem(&faces);
-
-				char *next_p;
-
-				face_p->indices[0] = strtol(data + i + 1, &next_p, 10) - 1;//-1 since it's stored as vertex's number
-				face_p->indices[1] = strtol(next_p + 1, &next_p, 10) - 1;
-				face_p->indices[2] = strtol(next_p + 1, &next_p, 10) - 1;
-				
-			}
-		}
-
-		Vec3f *mesh = malloc(sizeof(Vec3f) * faces.length * 6);
-
-		for(int i = 0; i < faces.length; i++){
-
-			Face *face_p = Array_getItemPointerByIndex(&faces, i);
-
-			for(int j = 0; j < 3; j++){
-
-				Vec3f *vertex_p = Array_getItemPointerByIndex(&vertices, face_p->indices[j]);
-
-				mesh[i * 6 + j * 2] = *vertex_p;
-			
-			}
-
-			Vec3f normal = getCrossVec3f(
-				getSubVec3f(mesh[i * 6 + 0], mesh[i * 6 + 2]),
-				getSubVec3f(mesh[i * 6 + 0], mesh[i * 6 + 4])
-			);
-
-			for(int j = 0; j < 3; j++){
-				mesh[i * 6 + j * 2 + 1] = normal;
-			}
-		
-		}
-
-		Array_free(&vertices);
-		Array_free(&faces);
-
-		glGenBuffers(1, &VBO);
-		glBindBuffer(GL_ARRAY_BUFFER, VBO);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(Vec3f) * 6 * faces.length, mesh, GL_STATIC_DRAW);
-
-		numberOfTriangles = faces.length;
-
-		free(mesh);
-		free(data);
-
-	}
-
-	/*
-	//setup triangle mesh
-	glGenBuffers(1, &triangleVBO);
-	glBindBuffer(GL_ARRAY_BUFFER, triangleVBO);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(triangleVertices), triangleVertices, GL_STATIC_DRAW);
-	*/
-
-	glGenVertexArrays(1, &VAO);
-	glBindVertexArray(VAO);
-
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void *)0);
-	glEnableVertexAttribArray(0);
-
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void *)(3 * sizeof(float)));
-	glEnableVertexAttribArray(1);
+	Model_initFromFile_obj(&teapotModel, "assets/models/teapot.obj");
+	Model_initFromFile_obj(&boxModel, "assets/models/box.obj");
 
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	glDepthFunc(GL_LESS);
+	glDepthMask(GL_TRUE);
 	glEnable(GL_DEPTH_TEST);
+
+	glEnable(GL_CULL_FACE);
+	glCullFace(GL_FRONT);
 
 	//generate shadow map
 	glGenFramebuffers(1, &shadowMapFBO);
@@ -203,36 +127,48 @@ void Engine_start(){
 
 	Array_init(&entities, sizeof(Entity));
 
-	/*
 	{
 		Entity *entity_p = Array_addItem(&entities);
 	
 		entity_p->pos = getVec3f(0.0, 0.0, 0.0);
+		entity_p->velocity = getVec3f(0.0, 0.0, 0.0);
+		entity_p->acceleration = getVec3f(0.0, 0.0, 0.0);
+		entity_p->resistance = getVec3f(PLAYER_GROUND_RESISTANCE, 1.0, PLAYER_GROUND_RESISTANCE);
+		entity_p->onGround = false;
+
 		entity_p->rotation = getVec3f(0.0, 0.0, 0.0);
 		entity_p->scale = 1.0;
+
+		entity_p->model = teapotModel;
+		entity_p->type = ENTITY_TYPE_PLAYER;
+	}
+
+	/*
+	for(int i = 0; i < 10; i++){
+
+		Entity *entity_p = Array_addItem(&entities);
+	
+		entity_p->pos = getVec3f(4.0 * i - 20.0, -4.0, 0.0);
+		entity_p->velocity = getVec3f(0.0, 0.0, 0.0);
+		entity_p->acceleration = getVec3f(0.0, 0.0, 0.0);
+		entity_p->resistance = getVec3f(1.0, 1.0, 1.0);
+		entity_p->onGround = false;
+
+		entity_p->rotation = getVec3f(0.0, 0.0, 0.0);
+		entity_p->scale = 2.0;
+
+		entity_p->model = boxModel;
+
+		entity_p->type = ENTITY_TYPE_OBSTACLE;
+	
 	}
 	*/
 	
-	{
-		Entity *entity_p = Array_addItem(&entities);
-	
-		entity_p->pos = getVec3f(0.0, 0.0, 5.0);
-		entity_p->rotation = getVec3f(0.0, 0.0, 0.0);
-		entity_p->scale = 0.2;
-	}
-	
-	{
-		Entity *entity_p = Array_addItem(&entities);
-	
-		entity_p->pos = getVec3f(0.0, 0.0, 10.0);
-		entity_p->rotation = getVec3f(0.0, 0.0, 0.0);
-		entity_p->scale = 0.5;
-	}
-
-	cameraPos = getVec3f(0, 0, 0);
+	cameraPos = getVec3f(0, 2.0, -10);
 	cameraRotation = getVec3f(M_PI / 2, 0, 0);
 
-	lightPos = getVec3f(0, 0, 0);
+	lightPos = getVec3f(0, 20, 0);
+	lightDirection = getVec3f(0, -1.0, 1.0);
 
 }
 
@@ -246,18 +182,8 @@ void Engine_update(float deltaTime){
 		Engine_quit();
 	}
 
-	if(Engine_keys[ENGINE_KEY_LEFT].down){
-		cameraRotation.x += 0.01;
-	}
-	if(Engine_keys[ENGINE_KEY_RIGHT].down){
-		cameraRotation.x -= 0.01;
-	}
-	if(Engine_keys[ENGINE_KEY_UP].down){
-		cameraRotation.y += 0.01;
-	}
-	if(Engine_keys[ENGINE_KEY_DOWN].down){
-		cameraRotation.y -= 0.01;
-	}
+	cameraRotation.x += -Engine_pointer.movement.x * CAMERA_MOVEMENT_SCALE;
+	cameraRotation.y += -Engine_pointer.movement.y * CAMERA_MOVEMENT_SCALE;
 
 	if(cameraRotation.y > M_PI / 2 - 0.01){
 		cameraRotation.y = M_PI / 2 - 0.01;
@@ -271,35 +197,91 @@ void Engine_update(float deltaTime){
 	cameraDirection.z = sin(cameraRotation.x) * cos(cameraRotation.y);
 	Vec3f_normalize(&cameraDirection);
 
-	cameraRight = getCrossVec3f(getVec3f(0.0, 1.0, 0.0), cameraDirection);
-	cameraUp = getCrossVec3f(cameraDirection, cameraRight);
-
-	Vec3f_normalize(&cameraRight);
-	Vec3f_normalize(&cameraUp);
-
 	if(Engine_keys[ENGINE_KEY_W].down){
-		float scale = 0.03;
-		cameraPos.x += cameraDirection.x * scale;
-		cameraPos.y += cameraDirection.y * scale;
-		cameraPos.z += cameraDirection.z * scale;
+		cameraPos.x += cameraDirection.x * PLAYER_WALK_SPEED;
+		cameraPos.z += cameraDirection.z * PLAYER_WALK_SPEED;
 	}
-
 	if(Engine_keys[ENGINE_KEY_S].down){
-		float scale = 0.03;
-		cameraPos.x += -cameraDirection.x * scale;
-		cameraPos.y += -cameraDirection.y * scale;
-		cameraPos.z += -cameraDirection.z * scale;
+		cameraPos.x += -cameraDirection.x * PLAYER_WALK_SPEED;
+		cameraPos.z += -cameraDirection.z * PLAYER_WALK_SPEED;
+	}
+	if(Engine_keys[ENGINE_KEY_A].down){
+		Vec3f left = getCrossVec3f(cameraDirection, getVec3f(0, 1.0, 0));
+		Vec3f_normalize(&left);
+		cameraPos.x += left.x * PLAYER_WALK_SPEED;
+		cameraPos.z += left.z * PLAYER_WALK_SPEED;
+	}
+	if(Engine_keys[ENGINE_KEY_D].down){
+		Vec3f right = getCrossVec3f(getVec3f(0, 1.0, 0), cameraDirection);
+		Vec3f_normalize(&right);
+		cameraPos.x += right.x * PLAYER_WALK_SPEED;
+		cameraPos.z += right.z * PLAYER_WALK_SPEED;
 	}
 
+	//control player
 	for(int i = 0; i < entities.length; i++){
 		
 		Entity *entity_p = Array_getItemPointerByIndex(&entities, i);
 
-		if(i == 0){
-			entity_p->rotation.y += 0.02;
-			entity_p->rotation.z += 0.02;
-			entity_p->pos.y = 0.4 + 0.1 * sin(time / 50);
+		entity_p->acceleration = getVec3f(0.0, 0.0, 0.0);
+
+		//entity_p->rotation.x += 0.05;
+		//entity_p->rotation.y += 0.05;
+		//entity_p->rotation.z += 0.05;
+
+	}
+
+	//apply physics for entities
+	for(int i = 0; i < entities.length; i++){
+		
+		Entity *entity_p = Array_getItemPointerByIndex(&entities, i);
+
+		Vec3f_add(&entity_p->velocity, entity_p->acceleration);
+
+		Vec3f_mulByVec3f(&entity_p->velocity, entity_p->resistance);
+
+	}
+
+	//move entities x
+	for(int i = 0; i < entities.length; i++){
+		
+		Entity *entity_p = Array_getItemPointerByIndex(&entities, i);
+
+		entity_p->pos.x += entity_p->velocity.x;
+
+	}
+
+	//move entities y
+	for(int i = 0; i < entities.length; i++){
+		
+		Entity *entity_p = Array_getItemPointerByIndex(&entities, i);
+
+		entity_p->pos.y += entity_p->velocity.y;
+
+	}
+
+	//handle entities collision y
+	for(int i = 0; i < entities.length; i++){
+		
+		Entity *entity_p = Array_getItemPointerByIndex(&entities, i);
+
+		entity_p->onGround = false;
+
+		if(entity_p->pos.y < 0
+		&& entity_p->type == ENTITY_TYPE_PLAYER){
+			entity_p->pos.y = 0;
+			entity_p->velocity.y = 0;
+			entity_p->onGround = true;
 		}
+
+	}
+
+	//move entities z
+	for(int i = 0; i < entities.length; i++){
+		
+		Entity *entity_p = Array_getItemPointerByIndex(&entities, i);
+
+		entity_p->pos.z += entity_p->velocity.z;
 
 	}
 
@@ -310,23 +292,17 @@ void Engine_draw(){
 	//setup camera matrices
 	Mat4f cameraMat4f = getIdentityMat4f();
 
-	{
-		Mat4f lookAtMat4f = { 
-			cameraRight.x,	   cameraRight.y, 	  cameraRight.z, 	 0.0,
-			cameraUp.x, 	   cameraUp.y, 		  cameraUp.z, 		 0.0,
-			cameraDirection.x, cameraDirection.y, cameraDirection.z, 0.0,
-			0.0, 			   0.0, 			  0.0, 				 1.0,
-		};
+	Mat4f_mulByMat4f(&cameraMat4f, getLookAtMat4f(cameraPos, cameraDirection));
 
-		Mat4f_mulByMat4f(&lookAtMat4f, getTranslationMat4f(-cameraPos.x, -cameraPos.y, -cameraPos.z));
+	//setup light matrices
+	Mat4f lightMat4f = getIdentityMat4f();
 
-		Mat4f_mulByMat4f(&cameraMat4f, lookAtMat4f);
-	}
+	Mat4f_mulByMat4f(&lightMat4f, getLookAtMat4f(lightPos, lightDirection));
 
 	//setup projection matrices
 	Mat4f perspectiveMat4f = getIdentityMat4f();
 
-	Mat4f_mulByMat4f(&perspectiveMat4f, getPerspectiveMat4f(fov, aspectRatio, far, near));
+	Mat4f_mulByMat4f(&perspectiveMat4f, getPerspectiveMat4f(fov, (float)Engine_clientWidth / (float)Engine_clientHeight, far, near));
 
 	//setup light matrices
 
@@ -336,19 +312,21 @@ void Engine_draw(){
 	glViewport(0, 0, SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT);
 	//glViewport(0, 0, Engine_clientWidth, Engine_clientHeight);
 
-	//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glClear(GL_DEPTH_BUFFER_BIT);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	//glClear(GL_DEPTH_BUFFER_BIT);
 
 	for(int i = 0; i < entities.length; i++){
 
 		Entity *entity_p = Array_getItemPointerByIndex(&entities, i);
 
+		Model currentModel = boxModel;
+
 		unsigned int currentShaderProgram = shadowMapShaderProgram;
 
 		glUseProgram(currentShaderProgram);
 
-		glBindBuffer(GL_ARRAY_BUFFER, VBO);
-		glBindVertexArray(VAO);
+		glBindBuffer(GL_ARRAY_BUFFER, entity_p->model.VBO);
+		glBindVertexArray(entity_p->model.VAO);
 
 		Mat4f modelRotationMat4f = getIdentityMat4f();
 
@@ -360,37 +338,14 @@ void Engine_draw(){
 
 		Mat4f_mulByMat4f(&modelMat4f, getScalingMat4f(entity_p->scale));
 
-		{
-			unsigned int location = glGetUniformLocation(currentShaderProgram, "modelMatrix");
+		GL3D_uniformMat4f(currentShaderProgram, "modelMatrix", modelMat4f);
+		GL3D_uniformMat4f(currentShaderProgram, "modelRotationMatrix", modelRotationMat4f);
+		GL3D_uniformMat4f(currentShaderProgram, "perspectiveMatrix", perspectiveMat4f);
+		GL3D_uniformMat4f(currentShaderProgram, "lightMatrix", lightMat4f);
 
-			glUniformMatrix4fv(location, 1, GL_FALSE, (float *)modelMat4f.values);
-		}
-		
-		{
-			unsigned int location = glGetUniformLocation(currentShaderProgram, "modelRotationMatrix");
+		GL3D_uniformVec3f(currentShaderProgram, "lightPos", lightPos);
 
-			glUniformMatrix4fv(location, 1, GL_FALSE, (float *)modelRotationMat4f.values);
-		}
-
-		{
-			unsigned int location = glGetUniformLocation(currentShaderProgram, "cameraMatrix");
-
-			glUniformMatrix4fv(location, 1, GL_FALSE, (float *)cameraMat4f.values);
-		}
-
-		{
-			unsigned int location = glGetUniformLocation(currentShaderProgram, "perspectiveMatrix");
-
-			glUniformMatrix4fv(location, 1, GL_FALSE, (float *)perspectiveMat4f.values);
-		}
-
-		{
-			unsigned int location = glGetUniformLocation(currentShaderProgram, "lightPos");
-
-			glUniform3f(location, lightPos.x, lightPos.y, lightPos.z);
-		}
-
-		glDrawArrays(GL_TRIANGLES, 0, numberOfTriangles * 3);
+		glDrawArrays(GL_TRIANGLES, 0, teapotModel.numberOfTriangles * 3);
 	
 	}
 
@@ -407,12 +362,11 @@ void Engine_draw(){
 		Entity *entity_p = Array_getItemPointerByIndex(&entities, i);
 
 		unsigned int currentShaderProgram = shaderProgram;
-		//unsigned int currentShaderProgram = shadowMapShaderProgram;
 
 		glUseProgram(currentShaderProgram);
 
-		glBindBuffer(GL_ARRAY_BUFFER, VBO);
-		glBindVertexArray(VAO);
+		glBindBuffer(GL_ARRAY_BUFFER, entity_p->model.VBO);
+		glBindVertexArray(entity_p->model.VAO);
 
 		Mat4f modelRotationMat4f = getIdentityMat4f();
 
@@ -426,37 +380,15 @@ void Engine_draw(){
 
 		glBindTexture(GL_TEXTURE_2D, shadowMapTexture);
 
-		{
-			unsigned int location = glGetUniformLocation(currentShaderProgram, "modelMatrix");
+		GL3D_uniformMat4f(currentShaderProgram, "modelMatrix", modelMat4f);
+		GL3D_uniformMat4f(currentShaderProgram, "modelRotationMatrix", modelRotationMat4f);
+		GL3D_uniformMat4f(currentShaderProgram, "cameraMatrix", cameraMat4f);
+		GL3D_uniformMat4f(currentShaderProgram, "perspectiveMatrix", perspectiveMat4f);
+		GL3D_uniformMat4f(currentShaderProgram, "lightMatrix", lightMat4f);
 
-			glUniformMatrix4fv(location, 1, GL_FALSE, (float *)modelMat4f.values);
-		}
-		
-		{
-			unsigned int location = glGetUniformLocation(currentShaderProgram, "modelRotationMatrix");
+		GL3D_uniformVec3f(currentShaderProgram, "lightPos", lightPos);
 
-			glUniformMatrix4fv(location, 1, GL_FALSE, (float *)modelRotationMat4f.values);
-		}
-
-		{
-			unsigned int location = glGetUniformLocation(currentShaderProgram, "cameraMatrix");
-
-			glUniformMatrix4fv(location, 1, GL_FALSE, (float *)cameraMat4f.values);
-		}
-
-		{
-			unsigned int location = glGetUniformLocation(currentShaderProgram, "perspectiveMatrix");
-
-			glUniformMatrix4fv(location, 1, GL_FALSE, (float *)perspectiveMat4f.values);
-		}
-
-		{
-			unsigned int location = glGetUniformLocation(currentShaderProgram, "lightPos");
-
-			glUniform3f(location, lightPos.x, lightPos.y, lightPos.z);
-		}
-
-		glDrawArrays(GL_TRIANGLES, 0, numberOfTriangles * 3);
+		glDrawArrays(GL_TRIANGLES, 0, teapotModel.numberOfTriangles * 3);
 	
 	}
 

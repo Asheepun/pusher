@@ -7,8 +7,8 @@ out vec3 fragmentNormal;
 
 uniform mat4 modelMatrix;
 uniform mat4 modelRotationMatrix;
-uniform mat4 cameraMatrix;
 uniform mat4 perspectiveMatrix;
+uniform mat4 lightMatrix;
 
 void main(){
 
@@ -17,7 +17,7 @@ void main(){
 
 	vec4 vertexPosition = vec4(attribute_vertexPosition.xyz, 1.0);
 
-	vec4 projectedPosition = vertexPosition * modelRotationMatrix * modelMatrix * perspectiveMatrix;
+	vec4 projectedPosition = vertexPosition * modelRotationMatrix * modelMatrix * lightMatrix * perspectiveMatrix;
 
 	gl_Position = projectedPosition;
 
