@@ -7,7 +7,7 @@
 #include "glad/gl.h"
 
 typedef struct Face{
-	unsigned int indices[3];
+	unsigned int indices[4];
 }Face;
 
 typedef struct Model{
@@ -16,10 +16,12 @@ typedef struct Model{
 	unsigned int numberOfTriangles;
 }Model;
 
-void Model_initFromFile_obj(Model *, char *);
+void Model_initFromFile_obj(Model *, char *, int);
 
 void GL3D_uniformMat4f(unsigned int, char *, Mat4f);
 
 void GL3D_uniformVec3f(unsigned int, char *, Vec3f);
+
+void GL3D_uniformInt(unsigned int, char *, int);
 
 #endif
