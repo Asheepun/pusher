@@ -104,6 +104,8 @@ static char *STORY_LEVEL_NAMES[] = {
 	"level8",
 	"level9",
 	"level10",
+	"level11",
+	"level12",
 };
 
 //FUNCTIONS

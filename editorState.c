@@ -80,6 +80,7 @@ void World_editorState(World *world_p){
 		IGUI_textInput(getVec2f(WIDTH - 900, 50), &levelNameInput);
 
 		String_set(world_p->currentLevel, levelNameInput.text, STRING_SIZE);
+
 		if(openingLevel){
 
 			int posX = WIDTH - 900;
@@ -125,6 +126,11 @@ void World_editorState(World *world_p){
 					}
 
 					posY += 80;
+
+					if(posY > HEIGHT - 80){
+						posY = 150;
+						posX += 200;
+					}
 
 				}
 			
