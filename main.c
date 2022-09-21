@@ -43,7 +43,7 @@ void Engine_start(){
 
 		Array_init(&world.entities, sizeof(Entity));
 
-		String_set(world.currentLevel, "level11", STRING_SIZE);
+		String_set(world.currentLevel, "level10", STRING_SIZE);
 	
 	}
 
