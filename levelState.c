@@ -71,6 +71,189 @@ void World_levelState(World *world_p){
 
 	}
 
+	//check if players are stuck x
+	{
+		bool playersAreStuck = false;
+		float playerVelocityX = 0.0;
+
+		for(int i = 0; i < world_p->entities.length; i++){
+
+			Entity *entity1_p = Array_getItemPointerByIndex(&world_p->entities, i);
+
+			if(entity1_p->type == ENTITY_TYPE_PLAYER){
+
+				playerVelocityX = entity1_p->velocity.x;
+
+				for(int j = 0; j < world_p->entities.length; j++){
+
+					Entity *entity2_p = Array_getItemPointerByIndex(&world_p->entities, j);
+
+					if(entity1_p->header.ID != entity2_p->header.ID
+					&& checkVec3fEquals(getAddVec3f(getVec3f(playerVelocityX, 0, 0), entity1_p->pos), entity2_p->pos)){
+
+						if(entity2_p->type == ENTITY_TYPE_OBSTACLE){
+							playersAreStuck = true;
+						}
+						if(entity2_p->type == ENTITY_TYPE_ROCK
+						|| entity2_p->type == ENTITY_TYPE_STICKY_ROCK){
+							entity1_p = entity2_p;
+							j = -1;
+							continue;
+						}
+					}
+				}
+			}
+
+		}
+
+		if(playersAreStuck){
+			for(int i = 0; i < world_p->entities.length; i++){
+
+				Entity *entity1_p = Array_getItemPointerByIndex(&world_p->entities, i);
+
+				if(entity1_p->type == ENTITY_TYPE_PLAYER){
+					entity1_p->velocity.x = 0.0;
+				}
+			}
+		
+		}
+	}
+
+	//check if players are stuck y
+	{
+		bool playersAreStuck = false;
+		float playerVelocityY = 0.0;
+
+		for(int i = 0; i < world_p->entities.length; i++){
+
+			Entity *entity1_p = Array_getItemPointerByIndex(&world_p->entities, i);
+
+			if(entity1_p->type == ENTITY_TYPE_PLAYER){
+
+				playerVelocityY = entity1_p->velocity.y;
+
+				for(int j = 0; j < world_p->entities.length; j++){
+
+					Entity *entity2_p = Array_getItemPointerByIndex(&world_p->entities, j);
+
+					if(entity1_p->header.ID != entity2_p->header.ID
+					&& checkVec3fEquals(getAddVec3f(getVec3f(0.0, playerVelocityY, 0.0), entity1_p->pos), entity2_p->pos)){
+
+						if(entity2_p->type == ENTITY_TYPE_OBSTACLE){
+							playersAreStuck = true;
+						}
+						if(entity2_p->type == ENTITY_TYPE_ROCK
+						|| entity2_p->type == ENTITY_TYPE_STICKY_ROCK){
+							entity1_p = entity2_p;
+							j = -1;
+							continue;
+						}
+					}
+				}
+			
+			}
+
+		}
+
+		if(playersAreStuck){
+			for(int i = 0; i < world_p->entities.length; i++){
+
+				Entity *entity1_p = Array_getItemPointerByIndex(&world_p->entities, i);
+
+				if(entity1_p->type == ENTITY_TYPE_PLAYER){
+					entity1_p->velocity.y = 0.0;
+				}
+			}
+		
+		}
+	}
+
+	//check if players are stuck z
+	{
+		bool playersAreStuck = false;
+		float playerVelocityZ = 0.0;
+
+		for(int i = 0; i < world_p->entities.length; i++){
+
+			Entity *entity1_p = Array_getItemPointerByIndex(&world_p->entities, i);
+
+			if(entity1_p->type == ENTITY_TYPE_PLAYER){
+
+				playerVelocityZ = entity1_p->velocity.z;
+
+				for(int j = 0; j < world_p->entities.length; j++){
+
+					Entity *entity2_p = Array_getItemPointerByIndex(&world_p->entities, j);
+
+					if(entity1_p->header.ID != entity2_p->header.ID
+					&& checkVec3fEquals(getAddVec3f(getVec3f(0.0, 0.0, playerVelocityZ), entity1_p->pos), entity2_p->pos)){
+
+						if(entity2_p->type == ENTITY_TYPE_OBSTACLE){
+							playersAreStuck = true;
+						}
+						if(entity2_p->type == ENTITY_TYPE_ROCK
+						|| entity2_p->type == ENTITY_TYPE_STICKY_ROCK){
+							entity1_p = entity2_p;
+							j = -1;
+							continue;
+						}
+					}
+				}
+			
+			}
+
+		}
+
+		if(playersAreStuck){
+			for(int i = 0; i < world_p->entities.length; i++){
+
+				Entity *entity1_p = Array_getItemPointerByIndex(&world_p->entities, i);
+
+				if(entity1_p->type == ENTITY_TYPE_PLAYER){
+					entity1_p->velocity.z = 0.0;
+				}
+			}
+		
+		}
+	}
+
+	//handle player and rock pushing
+	for(int i = 0; i < world_p->entities.length; i++){
+
+		Entity *entity1_p = Array_getItemPointerByIndex(&world_p->entities, i);
+
+		if(entity1_p->type == ENTITY_TYPE_PLAYER
+		|| entity1_p->type == ENTITY_TYPE_ROCK){
+
+			for(int j = 0; j < world_p->entities.length; j++){
+
+				Entity *entity2_p = Array_getItemPointerByIndex(&world_p->entities, j);
+
+				if(entity1_p->header.ID != entity2_p->header.ID
+				&& (entity2_p->type == ENTITY_TYPE_ROCK || entity2_p->type == ENTITY_TYPE_STICKY_ROCK)
+				//|| (entity1_p->type == ENTITY_TYPE_ROCK || entity1_p->type == ENTITY_TYPE_STICKY_ROCK)
+				//&& entity2_p->type == ENTITY_TYPE_STICKY_ROCK)
+				&& (checkVec3fEquals(getAddVec3f(entity1_p->pos, getVec3f(entity1_p->velocity.x, 0.0, 0.0)), entity2_p->pos)
+				|| checkVec3fEquals(getAddVec3f(entity1_p->pos, getVec3f(0.0, 0.0, entity1_p->velocity.z)), entity2_p->pos))
+				&& (fabs(entity1_p->velocity.x) > 0.0001
+				|| fabs(entity1_p->velocity.z) > 0.0001)){
+
+					printf("carried!\n");
+
+					entity2_p->velocity = entity1_p->velocity;
+
+					entity1_p = entity2_p;
+					j = -1;
+					continue;
+
+				}
+
+			}
+
+		}
+
+	}
+
 	//handle player and rock carrying
 	for(int i = 0; i < world_p->entities.length; i++){
 
@@ -107,77 +290,6 @@ void World_levelState(World *world_p){
 
 	}
 
-	//move entities x
-	for(int i = 0; i < world_p->entities.length; i++){
-
-		Entity *entity_p = Array_getItemPointerByIndex(&world_p->entities, i);
-
-		entity_p->pos.x += entity_p->velocity.x;
-
-	}
-
-	//handle collision with players x
-	for(int i = 0; i < world_p->entities.length; i++){
-
-		Entity *entity1_p = Array_getItemPointerByIndex(&world_p->entities, i);
-
-		if(entity1_p->type == ENTITY_TYPE_PLAYER){
-
-			for(int j = 0; j < world_p->entities.length; j++){
-
-				Entity *entity2_p = Array_getItemPointerByIndex(&world_p->entities, j);
-
-				if(entity1_p->header.ID != entity2_p->header.ID
-				&& (entity2_p->type == ENTITY_TYPE_ROCK
-				|| entity2_p->type == ENTITY_TYPE_STICKY_ROCK)
-				&& checkVec3fEquals(entity1_p->pos, entity2_p->pos)){
-
-					entity2_p->pos.x += entity1_p->pos.x - entity1_p->lastPos.x;
-
-					entity1_p = entity2_p;
-					j = -1;
-					continue;
-
-				}
-
-			}
-		
-		}
-
-	}
-
-
-	//handle collision with obstacles x
-	for(int i = 0; i < world_p->entities.length; i++){
-
-		Entity *entity1_p = Array_getItemPointerByIndex(&world_p->entities, i);
-
-		if(entity1_p->type == ENTITY_TYPE_OBSTACLE){
-
-			for(int j = 0; j < world_p->entities.length; j++){
-
-				Entity *entity2_p = Array_getItemPointerByIndex(&world_p->entities, j);
-
-				if(entity1_p->header.ID != entity2_p->header.ID
-				&& (entity2_p->type == ENTITY_TYPE_PLAYER
-				|| entity2_p->type == ENTITY_TYPE_ROCK
-				|| entity2_p->type == ENTITY_TYPE_STICKY_ROCK)
-				&& checkVec3fEquals(entity1_p->pos, entity2_p->pos)){
-
-					entity2_p->pos.x -= entity2_p->pos.x - entity2_p->lastPos.x;
-
-					entity1_p = entity2_p;
-					j = -1;
-					continue;
-
-				}
-
-			}
-		
-		}
-
-	}
-
 	//move entities y
 	for(int i = 0; i < world_p->entities.length; i++){
 
@@ -186,37 +298,6 @@ void World_levelState(World *world_p){
 		entity_p->pos.y += entity_p->velocity.y;
 
 	}
-
-	//handle collision with players y
-	for(int i = 0; i < world_p->entities.length; i++){
-
-		Entity *entity1_p = Array_getItemPointerByIndex(&world_p->entities, i);
-
-		if(entity1_p->type == ENTITY_TYPE_PLAYER){
-
-			for(int j = 0; j < world_p->entities.length; j++){
-
-				Entity *entity2_p = Array_getItemPointerByIndex(&world_p->entities, j);
-
-				if(entity1_p->header.ID != entity2_p->header.ID
-				&& (entity2_p->type == ENTITY_TYPE_ROCK
-				|| entity2_p->type == ENTITY_TYPE_STICKY_ROCK)
-				&& checkVec3fEquals(entity1_p->pos, entity2_p->pos)){
-
-					entity2_p->pos.y += entity1_p->pos.y - entity1_p->lastPos.y;
-
-					entity1_p = entity2_p;
-					j = -1;
-					continue;
-
-				}
-
-			}
-		
-		}
-
-	}
-
 
 	//handle collision with obstacles y
 	for(int i = 0; i < world_p->entities.length; i++){
@@ -249,32 +330,33 @@ void World_levelState(World *world_p){
 
 	}
 
-	//move entities z
+	//move entities x
 	for(int i = 0; i < world_p->entities.length; i++){
 
 		Entity *entity_p = Array_getItemPointerByIndex(&world_p->entities, i);
 
-		entity_p->pos.z += entity_p->velocity.z;
+		entity_p->pos.x += entity_p->velocity.x;
 
 	}
 
-	//handle collision with players z
+	//handle collision with obstacles x
 	for(int i = 0; i < world_p->entities.length; i++){
 
 		Entity *entity1_p = Array_getItemPointerByIndex(&world_p->entities, i);
 
-		if(entity1_p->type == ENTITY_TYPE_PLAYER){
+		if(entity1_p->type == ENTITY_TYPE_OBSTACLE){
 
 			for(int j = 0; j < world_p->entities.length; j++){
 
 				Entity *entity2_p = Array_getItemPointerByIndex(&world_p->entities, j);
 
 				if(entity1_p->header.ID != entity2_p->header.ID
-				&& (entity2_p->type == ENTITY_TYPE_ROCK
+				&& (entity2_p->type == ENTITY_TYPE_PLAYER
+				|| entity2_p->type == ENTITY_TYPE_ROCK
 				|| entity2_p->type == ENTITY_TYPE_STICKY_ROCK)
 				&& checkVec3fEquals(entity1_p->pos, entity2_p->pos)){
 
-					entity2_p->pos.z += entity1_p->pos.z - entity1_p->lastPos.z;
+					entity2_p->pos.x -= entity2_p->pos.x - entity2_p->lastPos.x;
 
 					entity1_p = entity2_p;
 					j = -1;
@@ -288,6 +370,14 @@ void World_levelState(World *world_p){
 
 	}
 
+	//move entities z
+	for(int i = 0; i < world_p->entities.length; i++){
+
+		Entity *entity_p = Array_getItemPointerByIndex(&world_p->entities, i);
+
+		entity_p->pos.z += entity_p->velocity.z;
+
+	}
 
 	//handle collision with obstacles z
 	for(int i = 0; i < world_p->entities.length; i++){
@@ -320,7 +410,6 @@ void World_levelState(World *world_p){
 
 	}
 
-	/*
 	//handle player vs sticky rock collision
 	for(int i = 0; i < world_p->entities.length; i++){
 
@@ -394,6 +483,5 @@ void World_levelState(World *world_p){
 
 		}
 	}
-	*/
 
 }
