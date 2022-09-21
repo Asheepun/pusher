@@ -263,56 +263,61 @@ Vec3f getNormalFromTriangleVec3f(Vec3f v1, Vec3f v2, Vec3f v3){
 	return N;
 }
 
-int test = 0;
+bool checkLineToTriangleIntersectionVec3f(Vec3f l1, Vec3f l2, Vec3f t1, Vec3f t2, Vec3f t3, Vec3f *collisionPoint_p){
 
-//ONLY WORKS IF l1 IS 0, 0, 0 MUST FIX!!!
-Vec3f getLineToTriangleIntersectionVec3f(Vec3f l1, Vec3f l2, Vec3f v1, Vec3f v2, Vec3f v3){
+	//printf("infunc---\n");
 
-	Vec3f O = l1;
-	Vec3f P = v1;
+	Vec3f N = getCrossVec3f(getSubVec3f(t2, t1), getSubVec3f(t3, t1));
 
-	Vec3f dl = getSubVec3f(l2, O);
+	Vec3f P = getSubVec3f(l1, getMulVec3fFloat(getSubVec3f(l2, l1), getDotVec3f(getSubVec3f(l1, t1), N) / getDotVec3f(getSubVec3f(l2, l1), N)));
 
-	Vec3f N = getNormalFromTriangleVec3f(v1, v2, v3);
+	*collisionPoint_p = P;
 
-	float a1 = getAngleBetweenVec3f(getSubVec3f(N, O), getSubVec3f(P, O));
+	float totalArea = getAreaFromTriangleVec3f(t1, t2, t3);
+	float a1 = getAreaFromTriangleVec3f(t1, t2, P);
+	float a2 = getAreaFromTriangleVec3f(t1, t3, P);
+	float a3 = getAreaFromTriangleVec3f(t2, t3, P);
 
-	if(a1 > M_PI / 2){
-		a1 = M_PI - a1;
-		Vec3f_inverse(&N);
-	}
+	/*
+	printf("%f\n", totalArea);
+	printf("%f\n", a1);
+	printf("%f\n", a2);
+	printf("%f\n", a3);
+	Vec3f_log(P);
 
-	Vec3f_mulByFloat(&N, getDistanceVec3f(O, P) * cos(a1));
+	printf("donefunc---\n");
+	*/
 
-	float a2 = getAngleBetweenVec3f(dl, N);
+	return a1 + a2 + a3 <= totalArea + 0.001;
 
-	if(a2 > M_PI / 2){
-		a2 = M_PI - a2;
-		Vec3f_inverse(&dl);
-	}
+	return false;
 
-	Vec3f_normalize(&dl);
-	Vec3f_mulByFloat(&dl, getMagVec3f(N) / cos(a2));
+	/*
+	float c1 = (P.x - t1.x) * (t2.y - t1.y) - (P.y - t1.y) * (t2.x - t1.x);
+	float c2 = (P.x - t2.x) * (t3.y - t2.y) - (P.y - t2.y) * (t3.x - t2.x);
+	float c3 = (P.x - t3.x) * (t1.y - t3.y) - (P.y - t3.y) * (t1.x - t3.x);
 
-	if(test % 1000 == 0){
+	Vec3f_log(N);
+	Vec3f_log(P);
 
-		/*
-		printf("---GETINTERSECTIONCALL---\n");
+	printf("donefunc---\n");
 
-		printf("a1: %f\n", a1);
-		printf("a2: %f\n", a2);
+	return c1 > 0 && c2 > 0 && c3 > 0
+	|| c1 < 0 && c2 < 0 && c3 < 0
+	|| c1 == 0 && c2 == 0 && c3 == 0;
+	*/
 
-		Vec3f_log(O);
-		Vec3f_log(dl);
+}
 
-		Vec3f_log(getAddVec3f(O, dl));
-		*/
-	
-	}
+void Vec3f_mulByMat4f(Vec3f *v_p, Mat4f m, float w){
 
-	test++;
+	Vec4f v4 = getVec4f(v_p->x, v_p->y, v_p->z, w);
 
-	return getAddVec3f(O, dl);
+	Vec4f_mulByMat4f(&v4, m);
+
+	v_p->x = v4.x;
+	v_p->y = v4.y;
+	v_p->z = v4.z;
 
 }
 

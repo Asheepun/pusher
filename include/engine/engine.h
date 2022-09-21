@@ -4,6 +4,7 @@
 #include "stdlib.h"
 #include "stdbool.h"
 #include "engine/geometry.h"
+#include "engine/array.h"
 
 //#define COLOR_BUFFER_SIZE 1920
 
@@ -67,6 +68,8 @@ enum Engine_KeyIdentifiers{
 	ENGINE_KEY_SPACE,
 	ENGINE_KEY_ESCAPE,
 
+	ENGINE_KEY_SHIFT,
+
 	ENGINE_KEYS_LENGTH,
 
 };
@@ -112,6 +115,8 @@ extern Engine_Key Engine_keys[ENGINE_KEYS_LENGTH];
 
 extern Engine_Pointer Engine_pointer;
 
+extern Array Engine_textInput;
+
 //extern Engine_Pixel colorBuffers[ENGINE_COLORS_LENGTH][COLOR_BUFFER_SIZE];
 
 //extern int screenWidth;
@@ -128,6 +133,8 @@ extern bool Engine_isFullscreen;
 
 extern int Engine_elapsedFrames;
 
+extern bool Engine_fpsModeOn;
+
 //ENGINE FUNCTIONS
 
 void Engine_start();
@@ -141,6 +148,8 @@ void Engine_finnish();
 void Engine_quit();
 
 //WINDOW FUNCTIONS
+
+void Engine_setFPSMode(bool);
 
 void Engine_setWindowTitle(char *);
 

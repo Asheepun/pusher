@@ -1,5 +1,7 @@
 //common includes
 #include "engine/engine.h"
+#include "engine/array.h"
+#include "engine/strings.h"
 
 #include "stdio.h"
 #include "stdlib.h"
@@ -77,9 +79,13 @@ bool Engine_isFullscreen = false;
 
 int Engine_elapsedFrames = 0;
 
+bool Engine_fpsModeOn = false;
+
 Engine_Key Engine_keys[ENGINE_KEYS_LENGTH];
 
 Engine_Pointer Engine_pointer;
+
+Array Engine_textInput;
 
 #ifdef __linux__
 static unsigned int OS_KEY_IDENTIFIERS[] = {
@@ -129,6 +135,8 @@ static unsigned int OS_KEY_IDENTIFIERS[] = {
 
 	XK_space,
 	XK_Escape,
+
+	XK_Shift_L,
 
 };
 #endif
@@ -182,6 +190,8 @@ static unsigned int OS_KEY_IDENTIFIERS[] = {
 	VK_SPACE,
 	VK_ESCAPE,
 
+	VK_SHIFT,
+
 };
 #endif
 
@@ -216,6 +226,8 @@ void initKeys(){
 		Engine_keys[i].upped = false;
 	
 	}
+
+	Array_init(&Engine_textInput, sizeof(char) * SMALL_STRING_SIZE);
 	
 }
 
@@ -224,6 +236,8 @@ void resetKeys(){
 		Engine_keys[i].downed = false;
 		Engine_keys[i].upped = false;
 	}
+
+	Array_clear(&Engine_textInput);
 }
 
 void initPointer(){
@@ -375,6 +389,15 @@ int main(){
 				//if(xev.xkey.keycode == XKeysymToKeycode(dpy, XK_Q)){
 					//quit = true;
 				//}
+				char buffer[SMALL_STRING_SIZE];
+				String_set(buffer, "", SMALL_STRING_SIZE);
+
+				XLookupString((XKeyPressedEvent *)&xev, buffer, STRING_SIZE, NULL, NULL);
+
+				if(!(strcmp(buffer, "") == 0)){
+					char *text = Array_addItem(&Engine_textInput);
+					String_set(text, buffer, SMALL_STRING_SIZE);
+				}
 
 				for(int i = 0; i < ENGINE_KEYS_LENGTH; i++){
 					if(xev.xkey.keycode == XKeysymToKeycode(dpy, Engine_keys[i].OSIdentifier)){
@@ -437,15 +460,14 @@ int main(){
 
 		//do fps magic
 
-		{
+		if(Engine_fpsModeOn){
+
 			int screenWidth = DisplayWidth(dpy, DefaultScreen(dpy));
 			int screenHeight = DisplayHeight(dpy, DefaultScreen(dpy));
 
 			XWarpPointer(dpy, None, root, 0, 0, 0, 0, screenWidth / 2, screenHeight / 2);
 
-			XFixesHideCursor(dpy, root);
-			XFlush(dpy);
-
+		}else{
 		}
 
 		//update
@@ -724,6 +746,32 @@ void Engine_quit(){
 }
 
 //WINDOW FUNCTIONS
+void Engine_setFPSMode(bool setting){
+
+	if(Engine_fpsModeOn == setting){
+		return;
+	}
+
+	Engine_fpsModeOn = setting;
+
+#ifdef __linux__
+	if(Engine_fpsModeOn){
+		XFixesHideCursor(dpy, root);
+		XFlush(dpy);
+		Engine_pointer.movement = getVec2f(0, 0);
+
+		int screenWidth = DisplayWidth(dpy, DefaultScreen(dpy));
+		int screenHeight = DisplayHeight(dpy, DefaultScreen(dpy));
+
+		Engine_pointer.pos = getVec2f(screenWidth / 2, screenHeight / 2);
+	}else{
+		XFixesShowCursor(dpy, root);
+		XFlush(dpy);
+	}
+#endif
+
+}
+
 void Engine_setWindowTitle(char *title){
 	
 #ifdef _WIN32

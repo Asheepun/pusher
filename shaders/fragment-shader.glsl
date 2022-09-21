@@ -13,64 +13,43 @@ uniform mat4 perspectiveMatrix;
 uniform mat4 lightMatrix;
 
 uniform vec3 lightPos;
-uniform vec3 treePos;
 uniform vec3 cameraPos;
 
-uniform int playerDimension;
-uniform int modelDimension;
+uniform vec4 color;
 
-float ambientLightComponent = 0.1;
-float diffuseLightComponent = 0.9;
+float ambientLightComponent = 0.3;
+float diffuseLightComponent = 0.7;
 
 void main(){
 
-
-	vec4 normal = vec4(fragmentNormal.xyz, 1.0);
 	vec4 position = vec4(fragmentPosition.xyz, 1.0);
-
+	vec4 normal = vec4(fragmentNormal.xyz, 1.0);
 	vec4 modelNormal = normal * modelRotationMatrix;
 	vec4 modelPosition = position * modelRotationMatrix * modelMatrix;
 	vec4 projectedPosition = position * modelRotationMatrix * modelMatrix * cameraMatrix * perspectiveMatrix;
-	vec4 lightProjectedPosition = vec4(lightPos, 1.0) * modelRotationMatrix * modelMatrix * lightMatrix * perspectiveMatrix;
+	vec4 lightProjectedPosition = position * modelRotationMatrix * modelMatrix * lightMatrix * perspectiveMatrix;
+
+	lightProjectedPosition.x /= lightProjectedPosition.w;
+	lightProjectedPosition.y /= lightProjectedPosition.w;
 
 	projectedPosition.x /= projectedPosition.w;
 	projectedPosition.y /= projectedPosition.w;
 
-	if(cameraPos.z < treePos.z){
-		if(cameraPos.x > treePos.x
-		&& (modelDimension != playerDimension
-		&& modelDimension != playerDimension - 1
-		|| cross(treePos - cameraPos, modelPosition.xyz - cameraPos).y > 0
-		&& modelDimension != playerDimension
-		|| cross(treePos - cameraPos, modelPosition.xyz - cameraPos).y < 0
-		&& modelDimension != playerDimension - 1)){
-			discard;
-		}
-		if(cameraPos.x < treePos.x
-		&& (modelDimension != playerDimension
-		&& modelDimension != playerDimension + 1
-		|| cross(treePos - cameraPos, modelPosition.xyz - cameraPos).y < 0
-		&& modelDimension != playerDimension
-		|| cross(treePos - cameraPos, modelPosition.xyz - cameraPos).y > 0
-		&& modelDimension != playerDimension + 1)){
-			discard;
-		}
-	}
+	vec4 color = color;
+	float alpha = color.w;
 
-	//lightProjectedPosition.y /= lightProjectedPosition.w;
-	//lightProjectedPosition.y /= lightProjectedPosition.w;
+	float depth = abs(projectedPosition.z / 100.0);
 
-	vec3 color = vec3(1.0, 1.0, 1.0);
-
-	float depth = abs(projectedPosition.z / 100);
-
-	float shadowMapDepth = texture(shadowMapTexture, vec2(0.5, 0.5) + lightProjectedPosition.xy / lightProjectedPosition.w / 2).x;
-	float shadowDepth = lightProjectedPosition.z / 100;
-	//float shadowMapDepth = texture(shadowMapTexture, gl_FragCoord.xy).x;
+	float shadowMapDepth = texture(shadowMapTexture, vec2(0.5, 0.5) + lightProjectedPosition.xy / 2).x;
+	float shadowDepth = lightProjectedPosition.z / 100.0;
 
 	float diffuseLight = abs(dot(normalize(lightPos - modelPosition.xyz), normalize(modelNormal.xyz)));
 
-	if(shadowDepth - 0.002 > shadowMapDepth
+	float shadowMargin = 0.005;
+	//shadowMargin = 0.00001;
+	//shadowMargin = 1.00;
+
+	if(shadowDepth - shadowMargin > shadowMapDepth
 	|| dot(normalize(modelNormal.xyz), normalize(modelPosition.xyz - lightPos)) > 0){
 		diffuseLight = 0.0;
 	}
@@ -79,11 +58,12 @@ void main(){
 
 	//color = vec3(depth, depth, depth);
 	//color = vec3(shadowMapDepth, shadowMapDepth, shadowMapDepth);
+	//color = vec3(shadowDepth, shadowDepth, shadowDepth);
 	//color = vec3(projectedPosition.x, projectedPosition.y, 0.0);
 
-	float alpha = 1.0;
-
     FragColor = vec4(color.xyz, alpha);
+
+    //FragColor = vec4(1.0, 1.0, 1.0, 1.0);
 
 	gl_FragDepth = depth;
 

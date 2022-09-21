@@ -3,49 +3,18 @@
 #include "engine/files.h"
 #include "engine/shaders.h"
 #include "engine/3d.h"
+#include "engine/renderer2d.h"
+#include "engine/igui.h"
+
+#include "game.h"
 
 #include "stdio.h"
 #include "math.h"
 #include "string.h"
 
-enum EntityType{
-	ENTITY_TYPE_PLAYER,
-	ENTITY_TYPE_OBSTACLE,
-};
-
-int WIDTH = 1920;
-int HEIGHT = 1080;
-
-float PLAYER_WALK_SPEED = 0.10;
-float PLAYER_GROUND_RESISTANCE = 0.9;
-float PLAYER_JUMP_SPEED = 0.5;
-float PLAYER_GRAVITY = 0.03;
-
-float CAMERA_MOVEMENT_SCALE = 0.0015;
-
-float triangleVertices[] = {
-	-1.0, -1.0, 0.0, 	0.0, 0.0, 1.0,
-	0.0, 1.0, 0.0, 		0.0, 0.0, 1.0,
-	1.0, -1.0, 0.0, 	0.0, 0.0, 1.0,
-};
-
-typedef struct Entity{
-	EntityHeader header;
-	float scale;
-	Vec3f pos;
-	Vec3f velocity;
-	Vec3f acceleration;
-	Vec3f resistance;
-	Vec3f rotation;
-	bool onGround;
-	Model model;
-	enum EntityType type;
-	int dimension;
-}Entity;
-
 Model teapotModel;
-Model boxModel;
 Model treeModel;
+Model keyModel;
 
 unsigned int triangleVBO;
 
@@ -57,71 +26,41 @@ unsigned int SHADOW_MAP_HEIGHT = 1080;
 unsigned int shaderProgram;
 unsigned int shadowMapShaderProgram;
 
-int numberOfTriangles;
-
-float fov = M_PI / 4;
-float aspectRatio = 16 / 9;
-float far = 100.0;
-float near = 0.1;
-
-Vec3f cameraPos;
-Vec3f lastCameraPos;
-Vec3f cameraRotation;
-Vec3f cameraDirection;
+enum ViewMode currentViewMode;
 
 Vec3f lightPos;
 Vec3f lightDirection;
 
-Vec3f treePos;
-Vec3f treeDirection;
+World world;
 
-Array entities;
-
-int playerDimension;
-float playerLastTreeSide = 0.0;
-size_t playerID;
-
-Entity *addEntity(Vec3f pos, Model model, float scale, enum EntityType type, int dimension){
-
-	Entity *entity_p = Array_addItem(&entities);
-
-	EntityHeader_init(&entity_p->header);
-
-	entity_p->pos = pos;
-	entity_p->scale = scale;
-
-	entity_p->model = model;
-	entity_p->type = type;
-
-	entity_p->dimension = dimension;
-
-	entity_p->velocity = getVec3f(0.0, 0.0, 0.0);
-	entity_p->acceleration = getVec3f(0.0, 0.0, 0.0);
-	entity_p->resistance = getVec3f(1.0, 1.0, 1.0);
-	entity_p->rotation = getVec3f(0.0, 0.0, 0.0);
-	entity_p->onGround = false;
-
-	return entity_p;
-
-}
-
-Entity *addPlayer(Vec3f pos, int dimension){
-
-	Entity *entity_p = addEntity(pos, teapotModel, 1.0, ENTITY_TYPE_PLAYER, dimension);
-
-	entity_p->resistance = getVec3f(PLAYER_GROUND_RESISTANCE, 1.0, PLAYER_GROUND_RESISTANCE);
-
-}
+Renderer2D_Renderer renderer2D;
 
 void Engine_start(){
+
+	Engine_setFPSMode(true);
+
+	{
+
+		Array_init(&world.entities, sizeof(Entity));
+
+		String_set(world.currentLevel, "level11", STRING_SIZE);
+	
+	}
 
 	Engine_setWindowSize(WIDTH / 2, HEIGHT / 2);
 
 	Engine_centerWindow();
 
-	Model_initFromFile_obj(&teapotModel, "assets/models/teapot.obj", 3);
-	Model_initFromFile_obj(&boxModel, "assets/models/box.obj", 3);
-	Model_initFromFile_obj(&treeModel, "assets/models/tree.obj", 4);
+	Model_initFromFile_obj(&teapotModel, "assets/models/teapot.obj");
+	Model_initFromFile_obj(&world.boxModel, "assets/models/box.obj");
+	Model_initFromFile_obj(&treeModel, "assets/models/tree.obj");
+	Model_initFromFile_obj(&keyModel, "assets/models/key.obj");
+
+	world.boxMesh = getMeshDataFromFile_obj("assets/models/box.obj", &world.boxMeshNumberOfTriangles);
+
+	Renderer2D_init(&renderer2D, WIDTH, HEIGHT);
+
+	IGUI_init(WIDTH, HEIGHT);
 
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -169,34 +108,23 @@ void Engine_start(){
 		glLinkProgram(shadowMapShaderProgram);
 	}
 
-	Array_init(&entities, sizeof(Entity));
+	//world.levels[world.currentLevel](&world);
 
-	treePos = getVec3f(0.0, 0.0, -15.0);
-	treeDirection = getVec3f(0.0, 0.0, 1.0);
+	World_loadLevelFromFile(&world, world.currentLevel);
 
-	//addPlayer(getVec3f(0.0, 0.0, 0.0), 1);
+	world.cameraPos = getVec3f(0, 10.0, -10.0);
+	world.cameraDirection = getVec3f(0.0, 0.0, 1.0);
+	world.cameraRotation = getVec3f(M_PI / 2, -M_PI / 4, 0.0);
 
-	addEntity(treePos, treeModel, 0.1, ENTITY_TYPE_OBSTACLE, 0);
-	addEntity(treePos, treeModel, 0.1, ENTITY_TYPE_OBSTACLE, 1);
-	addEntity(treePos, treeModel, 0.1, ENTITY_TYPE_OBSTACLE, 2);
-	addEntity(treePos, treeModel, 0.1, ENTITY_TYPE_OBSTACLE, 3);
-
-	addEntity(getVec3f(-10.0, -20.0, -10.0), boxModel, 20.0, ENTITY_TYPE_OBSTACLE, 0);
-	addEntity(getVec3f(-10.0, -20.0, -10.0), boxModel, 20.0, ENTITY_TYPE_OBSTACLE, 1);
-	addEntity(getVec3f(-10.0, -20.0, -10.0), boxModel, 20.0, ENTITY_TYPE_OBSTACLE, 2);
-	addEntity(getVec3f(-10.0, -20.0, -10.0), boxModel, 20.0, ENTITY_TYPE_OBSTACLE, 3);
-
-	addEntity(getVec3f(0.0, 0.0, 0.0), teapotModel, 1.0, ENTITY_TYPE_OBSTACLE, 2);
-	addEntity(getVec3f(5.0, 0.5, 0.0), boxModel, 1.0, ENTITY_TYPE_OBSTACLE, 1);
-
-	playerDimension = 1;
-
-	cameraPos = getVec3f(0, 2.0, -10);
-	cameraRotation = getVec3f(M_PI / 2, 0, 0);
-
-	lightPos = getVec3f(0, 20, -3);
-	lightDirection = getVec3f(0.2, -1.0, 0.0);
+	lightPos = getVec3f(-3, 30, -8);
+	lightDirection = getVec3f(0.001, -1.0, 0.0);
 	Vec3f_normalize(&lightDirection);
+
+	currentViewMode = VIEW_MODE_CAMERA;
+
+	world.gameState = GAME_STATE_LEVEL;
+	
+	World_initLevelState(&world);
 
 }
 
@@ -204,148 +132,47 @@ float time = 0;
 
 void Engine_update(float deltaTime){
 
+	IGUI_updatePointerScale();
+
+	//lightPos = getVec3f(-2, 20, -7);
+	//lightPos.y = 15 + 10 * sin(time / 50);
+
 	time++;
 
 	if(Engine_keys[ENGINE_KEY_Q].down){
 		Engine_quit();
 	}
 
-	cameraRotation.x += -Engine_pointer.movement.x * CAMERA_MOVEMENT_SCALE;
-	cameraRotation.y += -Engine_pointer.movement.y * CAMERA_MOVEMENT_SCALE;
-
-	if(cameraRotation.y > M_PI / 2 - 0.01){
-		cameraRotation.y = M_PI / 2 - 0.01;
-	}
-	if(cameraRotation.y < -(M_PI / 2 - 0.01)){
-		cameraRotation.y = -(M_PI / 2 - 0.01);
+	if(Engine_keys[ENGINE_KEY_F].downed){
+		Engine_toggleFullscreen();
 	}
 
-	cameraDirection.y = sin(cameraRotation.y);
-	cameraDirection.x = cos(cameraRotation.x) * cos(cameraRotation.y);
-	cameraDirection.z = sin(cameraRotation.x) * cos(cameraRotation.y);
-	Vec3f_normalize(&cameraDirection);
-
-	lastCameraPos = cameraPos;
-
-	if(Engine_keys[ENGINE_KEY_W].down){
-		cameraPos.x += cameraDirection.x * PLAYER_WALK_SPEED;
-		cameraPos.z += cameraDirection.z * PLAYER_WALK_SPEED;
+	if(Engine_keys[ENGINE_KEY_V].downed){
+		currentViewMode++;
 	}
-	if(Engine_keys[ENGINE_KEY_S].down){
-		cameraPos.x += -cameraDirection.x * PLAYER_WALK_SPEED;
-		cameraPos.z += -cameraDirection.z * PLAYER_WALK_SPEED;
-	}
-	if(Engine_keys[ENGINE_KEY_A].down){
-		Vec3f left = getCrossVec3f(cameraDirection, getVec3f(0, 1.0, 0));
-		Vec3f_normalize(&left);
-		cameraPos.x += left.x * PLAYER_WALK_SPEED;
-		cameraPos.z += left.z * PLAYER_WALK_SPEED;
-	}
-	if(Engine_keys[ENGINE_KEY_D].down){
-		Vec3f right = getCrossVec3f(getVec3f(0, 1.0, 0), cameraDirection);
-		Vec3f_normalize(&right);
-		cameraPos.x += right.x * PLAYER_WALK_SPEED;
-		cameraPos.z += right.z * PLAYER_WALK_SPEED;
+	if(currentViewMode >= NUMBER_OF_VIEW_MODES){
+		currentViewMode = 0;
 	}
 
-	//control player
-	for(int i = 0; i < entities.length; i++){
-		
-		Entity *entity_p = Array_getItemPointerByIndex(&entities, i);
+	world.cameraDirection.y = sin(world.cameraRotation.y);
+	world.cameraDirection.x = cos(world.cameraRotation.x) * cos(world.cameraRotation.y);
+	world.cameraDirection.z = sin(world.cameraRotation.x) * cos(world.cameraRotation.y);
+	Vec3f_normalize(&world.cameraDirection);
 
-		entity_p->acceleration = getVec3f(0.0, 0.0, 0.0);
-
-		//entity_p->rotation.x += 0.05;
-		//entity_p->rotation.y += 0.05;
-		//entity_p->rotation.z += 0.05;
-
-	}
-
-	//apply physics for entities
-	for(int i = 0; i < entities.length; i++){
-		
-		Entity *entity_p = Array_getItemPointerByIndex(&entities, i);
-
-		Vec3f_add(&entity_p->velocity, entity_p->acceleration);
-
-		Vec3f_mulByVec3f(&entity_p->velocity, entity_p->resistance);
-
-	}
-
-	//move entities x
-	for(int i = 0; i < entities.length; i++){
-		
-		Entity *entity_p = Array_getItemPointerByIndex(&entities, i);
-
-		entity_p->pos.x += entity_p->velocity.x;
-
-	}
-
-	//move entities y
-	for(int i = 0; i < entities.length; i++){
-		
-		Entity *entity_p = Array_getItemPointerByIndex(&entities, i);
-
-		entity_p->pos.y += entity_p->velocity.y;
-
-	}
-
-	//handle entities collision y
-	for(int i = 0; i < entities.length; i++){
-		
-		Entity *entity_p = Array_getItemPointerByIndex(&entities, i);
-
-		entity_p->onGround = false;
-
-		if(entity_p->pos.y < 0
-		&& entity_p->type == ENTITY_TYPE_PLAYER){
-			entity_p->pos.y = 0;
-			entity_p->velocity.y = 0;
-			entity_p->onGround = true;
-		}
-
-	}
-
-	//move entities z
-	for(int i = 0; i < entities.length; i++){
-		
-		Entity *entity_p = Array_getItemPointerByIndex(&entities, i);
-
-		entity_p->pos.z += entity_p->velocity.z;
-
-	}
-
-	//handle dimensions
-	if(cameraPos.z < treePos.z){
-
-		Vec3f cross = getCrossVec3f(getSubVec3f(cameraPos, treePos), treeDirection);
-
-		if(playerLastTreeSide == 0.0
-		|| lastCameraPos.z >= treePos.z){
-			playerLastTreeSide = cross.y;
-		}
-
-		if(cross.y > 0
-		&& playerLastTreeSide < 0){
-			playerDimension -= 1;
-			playerLastTreeSide = cross.y;
-		}
-		if(cross.y < 0
-		&& playerLastTreeSide > 0){
-			playerDimension += 1;
-			playerLastTreeSide = cross.y;
-		}
-	
+	if(world.gameState == GAME_STATE_LEVEL){
+		World_levelState(&world);
+	}else if(world.gameState == GAME_STATE_EDITOR){
+		World_editorState(&world);
 	}
 
 }
 
 void Engine_draw(){
 
-	//setup camera matrices
+	//setup world.camera matrices
 	Mat4f cameraMat4f = getIdentityMat4f();
 
-	Mat4f_mulByMat4f(&cameraMat4f, getLookAtMat4f(cameraPos, cameraDirection));
+	Mat4f_mulByMat4f(&cameraMat4f, getLookAtMat4f(world.cameraPos, world.cameraDirection));
 
 	//setup light matrices
 	Mat4f lightMat4f = getIdentityMat4f();
@@ -360,109 +187,115 @@ void Engine_draw(){
 	//render shadow map
 	glDisable(GL_CULL_FACE);
 
-	glBindFramebuffer(GL_FRAMEBUFFER, shadowMapFBO);  
-	glViewport(0, 0, SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT);
-
-	//glBindFramebuffer(GL_FRAMEBUFFER, 0);  
-	//glViewport(0, 0, Engine_clientWidth, Engine_clientHeight);
+	if(currentViewMode == VIEW_MODE_SHADOW_MAP){
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);  
+		glViewport(0, 0, Engine_clientWidth, Engine_clientHeight);
+	}else{
+		glBindFramebuffer(GL_FRAMEBUFFER, shadowMapFBO);  
+		glViewport(0, 0, SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT);
+	}
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	//glClear(GL_DEPTH_BUFFER_BIT);
 
-	for(int i = 0; i < entities.length; i++){
+	for(int i = 0; i < world.entities.length; i++){
 
-		Entity *entity_p = Array_getItemPointerByIndex(&entities, i);
+		Entity *entity_p = Array_getItemPointerByIndex(&world.entities, i);
 
-		if(entity_p->dimension == playerDimension
-		|| cameraPos.z < treePos.z){
+		unsigned int currentShaderProgram = shadowMapShaderProgram;
 
-			Model currentModel = boxModel;
+		glUseProgram(currentShaderProgram);
 
-			unsigned int currentShaderProgram = shadowMapShaderProgram;
+		glBindBuffer(GL_ARRAY_BUFFER, entity_p->model.VBO);
+		glBindVertexArray(entity_p->model.VAO);
 
-			glUseProgram(currentShaderProgram);
+		Mat4f modelRotationMat4f = getIdentityMat4f();
 
-			glBindBuffer(GL_ARRAY_BUFFER, entity_p->model.VBO);
-			glBindVertexArray(entity_p->model.VAO);
+		Mat4f_mulByMat4f(&modelRotationMat4f, getRotationMat4f(entity_p->rotation.x, entity_p->rotation.y, entity_p->rotation.z));
 
-			Mat4f modelRotationMat4f = getIdentityMat4f();
+		Mat4f modelMat4f = getIdentityMat4f();
 
-			Mat4f_mulByMat4f(&modelRotationMat4f, getRotationMat4f(entity_p->rotation.x, entity_p->rotation.y, entity_p->rotation.z));
+		Mat4f_mulByMat4f(&modelMat4f, getTranslationMat4f(entity_p->pos.x * 2.0 * 0.6, entity_p->pos.y * 2.0 * 0.6, entity_p->pos.z * 2.0 * 0.6));
 
-			Mat4f modelMat4f = getIdentityMat4f();
+		Mat4f_mulByMat4f(&modelMat4f, getScalingMat4f(entity_p->scale));
 
-			Mat4f_mulByMat4f(&modelMat4f, getTranslationMat4f(entity_p->pos.x, entity_p->pos.y, entity_p->pos.z));
+		GL3D_uniformMat4f(currentShaderProgram, "modelMatrix", modelMat4f);
+		GL3D_uniformMat4f(currentShaderProgram, "modelRotationMatrix", modelRotationMat4f);
+		GL3D_uniformMat4f(currentShaderProgram, "perspectiveMatrix", perspectiveMat4f);
+		GL3D_uniformMat4f(currentShaderProgram, "lightMatrix", lightMat4f);
 
-			Mat4f_mulByMat4f(&modelMat4f, getScalingMat4f(entity_p->scale));
+		GL3D_uniformVec3f(currentShaderProgram, "lightPos", lightPos);
+		GL3D_uniformVec3f(currentShaderProgram, "cameraPos", world.cameraPos);
 
-			GL3D_uniformMat4f(currentShaderProgram, "modelMatrix", modelMat4f);
-			GL3D_uniformMat4f(currentShaderProgram, "modelRotationMatrix", modelRotationMat4f);
-			GL3D_uniformMat4f(currentShaderProgram, "perspectiveMatrix", perspectiveMat4f);
-			GL3D_uniformMat4f(currentShaderProgram, "lightMatrix", lightMat4f);
-
-			GL3D_uniformVec3f(currentShaderProgram, "lightPos", lightPos);
-
-			glDrawArrays(GL_TRIANGLES, 0, entity_p->model.numberOfTriangles * 3);
-
-		}
+		glDrawArrays(GL_TRIANGLES, 0, entity_p->model.numberOfTriangles * 3);
 	
 	}
 
 	//render scene
 	glEnable(GL_CULL_FACE);
+	//glDisable(GL_DEPTH_TEST);
 
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	if(currentViewMode == VIEW_MODE_CAMERA){
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	}else{
+		glBindFramebuffer(GL_FRAMEBUFFER, 1);
+	}
 
 	glViewport(0, 0, Engine_clientWidth, Engine_clientHeight);
 
-	glClearColor(0.0, 0.3, 0.0, 1.0);
+	glClearColor(0.0, 0.0, 0.0, 1.0);
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	for(int i = 0; i < entities.length; i++){
+	for(int i = 0; i < world.entities.length; i++){
 
-		Entity *entity_p = Array_getItemPointerByIndex(&entities, i);
+		Entity *entity_p = Array_getItemPointerByIndex(&world.entities, i);
 
-		if(entity_p->dimension == playerDimension
-		|| cameraPos.z < treePos.z){
+		unsigned int currentShaderProgram = shaderProgram;
 
-			unsigned int currentShaderProgram = shaderProgram;
+		glUseProgram(currentShaderProgram);
 
-			glUseProgram(currentShaderProgram);
+		glBindBuffer(GL_ARRAY_BUFFER, entity_p->model.VBO);
+		glBindVertexArray(entity_p->model.VAO);
 
-			glBindBuffer(GL_ARRAY_BUFFER, entity_p->model.VBO);
-			glBindVertexArray(entity_p->model.VAO);
+		Mat4f modelRotationMat4f = getIdentityMat4f();
 
-			Mat4f modelRotationMat4f = getIdentityMat4f();
+		Mat4f_mulByMat4f(&modelRotationMat4f, getRotationMat4f(entity_p->rotation.x, entity_p->rotation.y, entity_p->rotation.z));
 
-			Mat4f_mulByMat4f(&modelRotationMat4f, getRotationMat4f(entity_p->rotation.x, entity_p->rotation.y, entity_p->rotation.z));
+		Mat4f modelMat4f = getIdentityMat4f();
 
-			Mat4f modelMat4f = getIdentityMat4f();
+		Mat4f_mulByMat4f(&modelMat4f, getTranslationMat4f(entity_p->pos.x * 2.0 * 0.6, entity_p->pos.y * 2.0 * 0.6, entity_p->pos.z * 2.0 * 0.6));
 
-			Mat4f_mulByMat4f(&modelMat4f, getTranslationMat4f(entity_p->pos.x, entity_p->pos.y, entity_p->pos.z));
+		Mat4f_mulByMat4f(&modelMat4f, getScalingMat4f(entity_p->scale));
 
-			Mat4f_mulByMat4f(&modelMat4f, getScalingMat4f(entity_p->scale));
+		glBindTexture(GL_TEXTURE_2D, shadowMapTexture);
 
-			glBindTexture(GL_TEXTURE_2D, shadowMapTexture);
+		GL3D_uniformMat4f(currentShaderProgram, "modelMatrix", modelMat4f);
+		GL3D_uniformMat4f(currentShaderProgram, "modelRotationMatrix", modelRotationMat4f);
+		GL3D_uniformMat4f(currentShaderProgram, "cameraMatrix", cameraMat4f);
+		GL3D_uniformMat4f(currentShaderProgram, "perspectiveMatrix", perspectiveMat4f);
+		GL3D_uniformMat4f(currentShaderProgram, "lightMatrix", lightMat4f);
 
-			GL3D_uniformMat4f(currentShaderProgram, "modelMatrix", modelMat4f);
-			GL3D_uniformMat4f(currentShaderProgram, "modelRotationMatrix", modelRotationMat4f);
-			GL3D_uniformMat4f(currentShaderProgram, "cameraMatrix", cameraMat4f);
-			GL3D_uniformMat4f(currentShaderProgram, "perspectiveMatrix", perspectiveMat4f);
-			GL3D_uniformMat4f(currentShaderProgram, "lightMatrix", lightMat4f);
+		GL3D_uniformVec3f(currentShaderProgram, "lightPos", lightPos);
+		GL3D_uniformVec3f(currentShaderProgram, "cameraPos", world.cameraPos);
 
-			GL3D_uniformVec3f(currentShaderProgram, "lightPos", lightPos);
-			GL3D_uniformVec3f(currentShaderProgram, "treePos", treePos);
-			GL3D_uniformVec3f(currentShaderProgram, "cameraPos", cameraPos);
+		GL3D_uniformVec4f(currentShaderProgram, "color", entity_p->color);
 
-			GL3D_uniformInt(currentShaderProgram, "playerDimension", playerDimension);
-			GL3D_uniformInt(currentShaderProgram, "modelDimension", entity_p->dimension);
-
-			glDrawArrays(GL_TRIANGLES, 0, entity_p->model.numberOfTriangles * 3);
-		
-		}
+		glDrawArrays(GL_TRIANGLES, 0, entity_p->model.numberOfTriangles * 3);
 	
 	}
+
+	glDisable(GL_DEPTH_TEST);
+
+	//draw 2d stuff
+	Renderer2D_updateDrawSize(&renderer2D, Engine_clientWidth, Engine_clientHeight);
+
+	if(world.gameState == GAME_STATE_EDITOR){
+		Renderer2D_drawColoredRectangle(&renderer2D, WIDTH / 2 - 3, HEIGHT / 2 - 3, 6, 6, Renderer2D_getColor(0.7, 0.7, 0.7), 1.0);
+	}
+
+	IGUI_render(&renderer2D);
+
+	glEnable(GL_DEPTH_TEST);
 
 }
 

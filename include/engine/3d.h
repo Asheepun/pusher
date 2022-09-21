@@ -6,21 +6,21 @@
 #include "glad/wgl.h"
 #include "glad/gl.h"
 
-typedef struct Face{
-	unsigned int indices[4];
-}Face;
-
 typedef struct Model{
 	unsigned int VBO;
 	unsigned int VAO;
 	unsigned int numberOfTriangles;
 }Model;
 
-void Model_initFromFile_obj(Model *, char *, int);
+Vec3f *getMeshDataFromFile_obj(char *, int *);
+
+void Model_initFromFile_obj(Model *, char *);
 
 void GL3D_uniformMat4f(unsigned int, char *, Mat4f);
 
 void GL3D_uniformVec3f(unsigned int, char *, Vec3f);
+
+void GL3D_uniformVec4f(unsigned int, char *, Vec4f);
 
 void GL3D_uniformInt(unsigned int, char *, int);
 

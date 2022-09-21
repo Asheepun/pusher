@@ -1,0 +1,500 @@
+#include "engine/engine.h"
+#include "engine/array.h"
+#include "engine/files.h"
+#include "engine/shaders.h"
+#include "engine/3d.h"
+
+#include "stdio.h"
+#include "math.h"
+#include "string.h"
+
+enum EntityType{
+	ENTITY_TYPE_PLAYER,
+	ENTITY_TYPE_OBSTACLE,
+	ENTITY_TYPE_KEY,
+};
+
+int WIDTH = 1920;
+int HEIGHT = 1080;
+
+float PLAYER_WALK_SPEED = 0.10;
+float PLAYER_GROUND_RESISTANCE = 0.9;
+float PLAYER_JUMP_SPEED = 0.5;
+float PLAYER_GRAVITY = 0.03;
+
+float CAMERA_MOVEMENT_SCALE = 0.0015;
+
+float triangleVertices[] = {
+	-1.0, -1.0, 0.0, 	0.0, 0.0, 1.0,
+	0.0, 1.0, 0.0, 		0.0, 0.0, 1.0,
+	1.0, -1.0, 0.0, 	0.0, 0.0, 1.0,
+};
+
+typedef struct Entity{
+	EntityHeader header;
+	float scale;
+	Vec3f pos;
+	Vec3f velocity;
+	Vec3f acceleration;
+	Vec3f resistance;
+	Vec3f rotation;
+	bool onGround;
+	Model model;
+	enum EntityType type;
+	int dimension;
+}Entity;
+
+Model teapotModel;
+Model boxModel;
+Model treeModel;
+Model keyModel;
+
+unsigned int triangleVBO;
+
+unsigned int shadowMapFBO;
+unsigned int shadowMapTexture;
+unsigned int SHADOW_MAP_WIDTH = 1920;
+unsigned int SHADOW_MAP_HEIGHT = 1080;
+
+unsigned int shaderProgram;
+unsigned int shadowMapShaderProgram;
+
+int numberOfTriangles;
+
+float fov = M_PI / 4;
+float aspectRatio = 16 / 9;
+float far = 100.0;
+float near = 0.1;
+
+Vec3f cameraPos;
+Vec3f lastCameraPos;
+Vec3f cameraRotation;
+Vec3f cameraDirection;
+
+Vec3f lightPos;
+Vec3f lightDirection;
+
+Vec3f treePos;
+Vec3f treeDirection;
+
+Array entities;
+
+bool playerBehindTree;
+int playerDimension;
+int playerLastDimension;
+float playerInBehindTreeSide = 0;
+size_t playerID;
+
+Entity *addEntity(Vec3f pos, Model model, float scale, enum EntityType type, int dimension){
+
+	Entity *entity_p = Array_addItem(&entities);
+
+	EntityHeader_init(&entity_p->header);
+
+	entity_p->pos = pos;
+	entity_p->scale = scale;
+
+	entity_p->model = model;
+	entity_p->type = type;
+
+	entity_p->dimension = dimension;
+
+	entity_p->velocity = getVec3f(0.0, 0.0, 0.0);
+	entity_p->acceleration = getVec3f(0.0, 0.0, 0.0);
+	entity_p->resistance = getVec3f(1.0, 1.0, 1.0);
+	entity_p->rotation = getVec3f(0.0, 0.0, 0.0);
+	entity_p->onGround = false;
+
+	return entity_p;
+
+}
+
+Entity *addPlayer(Vec3f pos, int dimension){
+
+	Entity *entity_p = addEntity(pos, teapotModel, 1.0, ENTITY_TYPE_PLAYER, dimension);
+
+	entity_p->resistance = getVec3f(PLAYER_GROUND_RESISTANCE, 1.0, PLAYER_GROUND_RESISTANCE);
+
+}
+
+Entity *addKey(Vec3f pos, int dimension){
+
+	Entity *entity_p = addEntity(pos, keyModel, 0.01, ENTITY_TYPE_KEY, 2);
+
+	//entity_p->rotation = getVec3f(-M_PI / 2, 0.0, 0.0);
+	entity_p->rotation = getVec3f(-M_PI / 2, 0.0, 0.0);
+
+	return entity_p;
+
+}
+
+void Engine_start(){
+
+	Engine_setWindowSize(WIDTH / 2, HEIGHT / 2);
+
+	Engine_centerWindow();
+
+	Model_initFromFile_obj(&teapotModel, "assets/models/teapot.obj");
+	Model_initFromFile_obj(&boxModel, "assets/models/box.obj");
+	Model_initFromFile_obj(&treeModel, "assets/models/tree.obj");
+	Model_initFromFile_obj(&keyModel, "assets/models/key.obj");
+
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	glDepthFunc(GL_LESS);
+	glDepthMask(GL_TRUE);
+	glEnable(GL_DEPTH_TEST);
+
+	glEnable(GL_CULL_FACE);
+	glCullFace(GL_FRONT);
+
+	//generate shadow map
+	glGenFramebuffers(1, &shadowMapFBO);
+
+	glGenTextures(1, &shadowMapTexture);
+	glBindTexture(GL_TEXTURE_2D, shadowMapTexture);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); 
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);  
+
+	glBindFramebuffer(GL_FRAMEBUFFER, shadowMapFBO);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowMapTexture, 0);
+	glDrawBuffer(GL_NONE);
+	glReadBuffer(GL_NONE);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);  
+
+	{
+		unsigned int vertexShader = getCompiledShader("shaders/vertex-shader.glsl", GL_VERTEX_SHADER);
+		unsigned int fragmentShader = getCompiledShader("shaders/fragment-shader.glsl", GL_FRAGMENT_SHADER);
+
+		shaderProgram = glCreateProgram();
+		glAttachShader(shaderProgram, vertexShader);
+		glAttachShader(shaderProgram, fragmentShader);
+		glLinkProgram(shaderProgram);
+	}
+	{
+		unsigned int vertexShader = getCompiledShader("shaders/shadow-map-vertex-shader.glsl", GL_VERTEX_SHADER);
+		unsigned int fragmentShader = getCompiledShader("shaders/shadow-map-fragment-shader.glsl", GL_FRAGMENT_SHADER);
+
+		shadowMapShaderProgram = glCreateProgram();
+		glAttachShader(shadowMapShaderProgram, vertexShader);
+		glAttachShader(shadowMapShaderProgram, fragmentShader);
+		glLinkProgram(shadowMapShaderProgram);
+	}
+
+	Array_init(&entities, sizeof(Entity));
+
+	treePos = getVec3f(0.0, 0.0, -15.0);
+
+	//addPlayer(getVec3f(0.0, 0.0, 0.0), 1);
+
+	addEntity(treePos, treeModel, 0.1, ENTITY_TYPE_OBSTACLE, -1);
+
+	addEntity(getVec3f(-10.0, -20.0, -10.0), boxModel, 20.0, ENTITY_TYPE_OBSTACLE, -1);
+
+	addEntity(getVec3f(0.0, 0.0, 0.0), teapotModel, 1.0, ENTITY_TYPE_OBSTACLE, 4);
+	addEntity(getVec3f(5.0, 0.5, 0.0), boxModel, 1.0, ENTITY_TYPE_OBSTACLE, 2);
+
+	addKey(getVec3f(0, 1.0, -3.0), 2);
+
+	/*
+	addEntity(getVec3f(-2.5, 0.5, -13), boxModel, 1.0, ENTITY_TYPE_OBSTACLE, 0);
+	addEntity(getVec3f(0.0, 0.5, -12.5), boxModel, 2.0, ENTITY_TYPE_OBSTACLE, 0);
+	addEntity(getVec3f(-5.0, 0.5, -12), boxModel, 1.5, ENTITY_TYPE_OBSTACLE, 0);
+	addEntity(getVec3f(-7.0, 0.0, -13), boxModel, 1.5, ENTITY_TYPE_OBSTACLE, 0);
+
+	addEntity(getVec3f(-2.5, 0.0, -17), teapotModel, 0.5, ENTITY_TYPE_OBSTACLE, 5);
+	addEntity(getVec3f(0.0, 0.0, -17), teapotModel, 1.0, ENTITY_TYPE_OBSTACLE, 5);
+	addEntity(getVec3f(-5.0, 0.0, -18), teapotModel, 0.7, ENTITY_TYPE_OBSTACLE, 5);
+	addEntity(getVec3f(-7.0, 0.0, -17), teapotModel, 0.7, ENTITY_TYPE_OBSTACLE, 5);
+	*/
+
+	playerDimension = 2;
+	playerLastDimension = 2;
+
+	cameraPos = getVec3f(0, 2.0, -10);
+	cameraRotation = getVec3f(M_PI / 2, 0, 0);
+
+	lightPos = getVec3f(-2, 20, -7);
+	lightDirection = getVec3f(0.2, -1.0, 0.0);
+	Vec3f_normalize(&lightDirection);
+
+}
+
+float time = 0;
+
+void Engine_update(float deltaTime){
+
+	time++;
+
+	if(Engine_keys[ENGINE_KEY_Q].down){
+		Engine_quit();
+	}
+
+	cameraRotation.x += -Engine_pointer.movement.x * CAMERA_MOVEMENT_SCALE;
+	cameraRotation.y += -Engine_pointer.movement.y * CAMERA_MOVEMENT_SCALE;
+
+	if(cameraRotation.y > M_PI / 2 - 0.01){
+		cameraRotation.y = M_PI / 2 - 0.01;
+	}
+	if(cameraRotation.y < -(M_PI / 2 - 0.01)){
+		cameraRotation.y = -(M_PI / 2 - 0.01);
+	}
+
+	cameraDirection.y = sin(cameraRotation.y);
+	cameraDirection.x = cos(cameraRotation.x) * cos(cameraRotation.y);
+	cameraDirection.z = sin(cameraRotation.x) * cos(cameraRotation.y);
+	Vec3f_normalize(&cameraDirection);
+
+	lastCameraPos = cameraPos;
+
+	if(Engine_keys[ENGINE_KEY_W].down){
+		cameraPos.x += cameraDirection.x * PLAYER_WALK_SPEED;
+		cameraPos.z += cameraDirection.z * PLAYER_WALK_SPEED;
+	}
+	if(Engine_keys[ENGINE_KEY_S].down){
+		cameraPos.x += -cameraDirection.x * PLAYER_WALK_SPEED;
+		cameraPos.z += -cameraDirection.z * PLAYER_WALK_SPEED;
+	}
+	if(Engine_keys[ENGINE_KEY_A].down){
+		Vec3f left = getCrossVec3f(cameraDirection, getVec3f(0, 1.0, 0));
+		Vec3f_normalize(&left);
+		cameraPos.x += left.x * PLAYER_WALK_SPEED;
+		cameraPos.z += left.z * PLAYER_WALK_SPEED;
+	}
+	if(Engine_keys[ENGINE_KEY_D].down){
+		Vec3f right = getCrossVec3f(getVec3f(0, 1.0, 0), cameraDirection);
+		Vec3f_normalize(&right);
+		cameraPos.x += right.x * PLAYER_WALK_SPEED;
+		cameraPos.z += right.z * PLAYER_WALK_SPEED;
+	}
+
+	//control entities
+	for(int i = 0; i < entities.length; i++){
+		
+		Entity *entity_p = Array_getItemPointerByIndex(&entities, i);
+
+		entity_p->acceleration = getVec3f(0.0, 0.0, 0.0);
+
+		if(entity_p->type == ENTITY_TYPE_KEY){
+			entity_p->rotation.x += 0.02;
+		}
+
+		//entity_p->rotation.x += 0.05;
+		//entity_p->rotation.y += 0.05;
+		//entity_p->rotation.z += 0.05;
+
+	}
+
+	//apply physics for entities
+	for(int i = 0; i < entities.length; i++){
+		
+		Entity *entity_p = Array_getItemPointerByIndex(&entities, i);
+
+		Vec3f_add(&entity_p->velocity, entity_p->acceleration);
+
+		Vec3f_mulByVec3f(&entity_p->velocity, entity_p->resistance);
+
+	}
+
+	//move entities x
+	for(int i = 0; i < entities.length; i++){
+		
+		Entity *entity_p = Array_getItemPointerByIndex(&entities, i);
+
+		entity_p->pos.x += entity_p->velocity.x;
+
+	}
+
+	//move entities y
+	for(int i = 0; i < entities.length; i++){
+		
+		Entity *entity_p = Array_getItemPointerByIndex(&entities, i);
+
+		entity_p->pos.y += entity_p->velocity.y;
+
+	}
+
+	//handle entities collision y
+	for(int i = 0; i < entities.length; i++){
+		
+		Entity *entity_p = Array_getItemPointerByIndex(&entities, i);
+
+		entity_p->onGround = false;
+
+		if(entity_p->pos.y < 0
+		&& entity_p->type == ENTITY_TYPE_PLAYER){
+			entity_p->pos.y = 0;
+			entity_p->velocity.y = 0;
+			entity_p->onGround = true;
+		}
+
+	}
+
+	//move entities z
+	for(int i = 0; i < entities.length; i++){
+		
+		Entity *entity_p = Array_getItemPointerByIndex(&entities, i);
+
+		entity_p->pos.z += entity_p->velocity.z;
+
+	}
+
+	//handle dimension for player
+	if(cameraPos.z < treePos.z
+	&& lastCameraPos.z > treePos.z){
+		if(cameraPos.x > treePos.x){
+			playerDimension -= 1;
+		}
+		if(cameraPos.x < treePos.x){
+			playerDimension += 1;
+		}
+	}
+	if(cameraPos.z > treePos.z
+	&& lastCameraPos.z < treePos.z){
+		if(cameraPos.x > treePos.x){
+			playerDimension += 1;
+		}
+		if(cameraPos.x < treePos.x){
+			playerDimension -= 1;
+		}
+	}
+
+}
+
+void Engine_draw(){
+
+	//setup camera matrices
+	Mat4f cameraMat4f = getIdentityMat4f();
+
+	Mat4f_mulByMat4f(&cameraMat4f, getLookAtMat4f(cameraPos, cameraDirection));
+
+	//setup light matrices
+	Mat4f lightMat4f = getIdentityMat4f();
+
+	Mat4f_mulByMat4f(&lightMat4f, getLookAtMat4f(lightPos, lightDirection));
+
+	//setup projection matrices
+	Mat4f perspectiveMat4f = getIdentityMat4f();
+
+	Mat4f_mulByMat4f(&perspectiveMat4f, getPerspectiveMat4f(fov, (float)Engine_clientWidth / (float)Engine_clientHeight, far, near));
+
+	//render shadow map
+	glDisable(GL_CULL_FACE);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, shadowMapFBO);  
+	glViewport(0, 0, SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT);
+
+	//glBindFramebuffer(GL_FRAMEBUFFER, 0);  
+	//glViewport(0, 0, Engine_clientWidth, Engine_clientHeight);
+
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	//glClear(GL_DEPTH_BUFFER_BIT);
+
+	for(int i = 0; i < entities.length; i++){
+
+		Entity *entity_p = Array_getItemPointerByIndex(&entities, i);
+
+		if(playerDimension - 1 <= entity_p->dimension <= playerDimension + 1){
+
+			Model currentModel = boxModel;
+
+			unsigned int currentShaderProgram = shadowMapShaderProgram;
+
+			glUseProgram(currentShaderProgram);
+
+			glBindBuffer(GL_ARRAY_BUFFER, entity_p->model.VBO);
+			glBindVertexArray(entity_p->model.VAO);
+
+			Mat4f modelRotationMat4f = getIdentityMat4f();
+
+			Mat4f_mulByMat4f(&modelRotationMat4f, getRotationMat4f(entity_p->rotation.x, entity_p->rotation.y, entity_p->rotation.z));
+
+			Mat4f modelMat4f = getIdentityMat4f();
+
+			Mat4f_mulByMat4f(&modelMat4f, getTranslationMat4f(entity_p->pos.x, entity_p->pos.y, entity_p->pos.z));
+
+			Mat4f_mulByMat4f(&modelMat4f, getScalingMat4f(entity_p->scale));
+
+			GL3D_uniformMat4f(currentShaderProgram, "modelMatrix", modelMat4f);
+			GL3D_uniformMat4f(currentShaderProgram, "modelRotationMatrix", modelRotationMat4f);
+			GL3D_uniformMat4f(currentShaderProgram, "perspectiveMatrix", perspectiveMat4f);
+			GL3D_uniformMat4f(currentShaderProgram, "lightMatrix", lightMat4f);
+
+			GL3D_uniformVec3f(currentShaderProgram, "lightPos", lightPos);
+			GL3D_uniformVec3f(currentShaderProgram, "treePos", treePos);
+			GL3D_uniformVec3f(currentShaderProgram, "cameraPos", cameraPos);
+
+			GL3D_uniformInt(currentShaderProgram, "playerDimension", playerDimension);
+			GL3D_uniformInt(currentShaderProgram, "modelDimension", entity_p->dimension);
+
+			glDrawArrays(GL_TRIANGLES, 0, entity_p->model.numberOfTriangles * 3);
+
+		}
+	
+	}
+
+	//render scene
+	glEnable(GL_CULL_FACE);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	//glBindFramebuffer(GL_FRAMEBUFFER, 1);
+
+	glViewport(0, 0, Engine_clientWidth, Engine_clientHeight);
+
+	glClearColor(0.0, 0.3, 0.0, 1.0);
+
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	for(int i = 0; i < entities.length; i++){
+
+		Entity *entity_p = Array_getItemPointerByIndex(&entities, i);
+
+		if(playerDimension - 1 <= entity_p->dimension <= playerDimension + 1){
+
+			unsigned int currentShaderProgram = shaderProgram;
+
+			glUseProgram(currentShaderProgram);
+
+			glBindBuffer(GL_ARRAY_BUFFER, entity_p->model.VBO);
+			glBindVertexArray(entity_p->model.VAO);
+
+			Mat4f modelRotationMat4f = getIdentityMat4f();
+
+			Mat4f_mulByMat4f(&modelRotationMat4f, getRotationMat4f(entity_p->rotation.x, entity_p->rotation.y, entity_p->rotation.z));
+
+			Mat4f modelMat4f = getIdentityMat4f();
+
+			Mat4f_mulByMat4f(&modelMat4f, getTranslationMat4f(entity_p->pos.x, entity_p->pos.y, entity_p->pos.z));
+
+			Mat4f_mulByMat4f(&modelMat4f, getScalingMat4f(entity_p->scale));
+
+			glBindTexture(GL_TEXTURE_2D, shadowMapTexture);
+
+			GL3D_uniformMat4f(currentShaderProgram, "modelMatrix", modelMat4f);
+			GL3D_uniformMat4f(currentShaderProgram, "modelRotationMatrix", modelRotationMat4f);
+			GL3D_uniformMat4f(currentShaderProgram, "cameraMatrix", cameraMat4f);
+			GL3D_uniformMat4f(currentShaderProgram, "perspectiveMatrix", perspectiveMat4f);
+			GL3D_uniformMat4f(currentShaderProgram, "lightMatrix", lightMat4f);
+
+			GL3D_uniformVec3f(currentShaderProgram, "lightPos", lightPos);
+			GL3D_uniformVec3f(currentShaderProgram, "treePos", treePos);
+			GL3D_uniformVec3f(currentShaderProgram, "cameraPos", cameraPos);
+
+			GL3D_uniformInt(currentShaderProgram, "playerDimension", playerDimension);
+			GL3D_uniformInt(currentShaderProgram, "modelDimension", entity_p->dimension);
+
+			glDrawArrays(GL_TRIANGLES, 0, entity_p->model.numberOfTriangles * 3);
+		
+		}
+	
+	}
+
+}
+
+void Engine_finnish(){
+
+}

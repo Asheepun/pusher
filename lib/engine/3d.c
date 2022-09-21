@@ -11,7 +11,11 @@
 #include "string.h"
 #include "stdlib.h"
 
-void Model_initFromFile_obj(Model *model_p, char *path, int numberOfFaceVertices){
+typedef struct Face{
+	unsigned int indices[4];
+}Face;
+
+Vec3f *getMeshDataFromFile_obj(char *path, int *numberOfTrianglesOut_p){
 
 	//read vertices and indices
 	long int fileSize;
@@ -46,25 +50,37 @@ void Model_initFromFile_obj(Model *model_p, char *path, int numberOfFaceVertices
 
 				char *next_p;
 
-				if(numberOfFaceVertices == 3){
-					face_p->indices[0] = strtol(data + i + 1, &next_p, 10) - 1;//-1 since it's stored as vertex's number
-					face_p->indices[1] = strtol(next_p + 1, &next_p, 10) - 1;
-					face_p->indices[2] = strtol(next_p + 1, &next_p, 10) - 1;
+				face_p->indices[0] = strtol(data + i + 1, &next_p, 10) - 1;//-1 since it's stored as vertex's number
+				strtol(next_p + 1, &next_p, 10);
+				strtol(next_p + 1, &next_p, 10);
+				face_p->indices[1] = strtol(next_p + 1, &next_p, 10) - 1;
+				strtol(next_p + 1, &next_p, 10);
+				strtol(next_p + 1, &next_p, 10);
+				face_p->indices[2] = strtol(next_p + 1, &next_p, 10) - 1;
+				strtol(next_p + 1, &next_p, 10);
+				strtol(next_p + 1, &next_p, 10);
+
+				char *lastNext_p = next_p + 1;
+				strtol(next_p + 1, &next_p, 10);
+
+				if(lastNext_p != next_p){
+
+					Face *face2_p = Array_addItem(&faces);
+
+					face2_p->indices[2] = strtol(data + i + 1, &next_p, 10) - 1;
+					strtol(next_p + 1, &next_p, 10);
+					strtol(next_p + 1, &next_p, 10);
+					strtol(next_p + 1, &next_p, 10);
+					strtol(next_p + 1, &next_p, 10);
+					strtol(next_p + 1, &next_p, 10);
+
+					face2_p->indices[0] = strtol(next_p + 1, &next_p, 10) - 1;
+					strtol(next_p + 1, &next_p, 10);
+					strtol(next_p + 1, &next_p, 10);
+					face2_p->indices[1] = strtol(next_p + 1, &next_p, 10) - 1;
+
 				}
 
-				if(numberOfFaceVertices == 4){
-					face_p->indices[0] = strtol(data + i + 1, &next_p, 10) - 1;//-1 since it's stored as vertex's number
-					strtol(next_p + 1, &next_p, 10);
-					strtol(next_p + 1, &next_p, 10);
-					face_p->indices[1] = strtol(next_p + 1, &next_p, 10) - 1;
-					strtol(next_p + 1, &next_p, 10);
-					strtol(next_p + 1, &next_p, 10);
-					face_p->indices[2] = strtol(next_p + 1, &next_p, 10) - 1;
-					strtol(next_p + 1, &next_p, 10);
-					strtol(next_p + 1, &next_p, 10);
-					face_p->indices[3] = strtol(next_p + 1, &next_p, 10) - 1;
-				}
-				
 			}
 		
 		}
@@ -73,93 +89,145 @@ void Model_initFromFile_obj(Model *model_p, char *path, int numberOfFaceVertices
 	//create mesh
 	Vec3f *mesh;
 
-	if(numberOfFaceVertices == 3){
+	mesh = malloc(sizeof(Vec3f) * faces.length * 3);
 
-		model_p->numberOfTriangles = faces.length;
+	for(int i = 0; i < faces.length; i++){
 
-		mesh = malloc(sizeof(Vec3f) * model_p->numberOfTriangles * 6);
+		Face *face_p = Array_getItemPointerByIndex(&faces, i);
 
-		for(int i = 0; i < faces.length; i++){
+		for(int j = 0; j < 3; j++){
 
-			Face *face_p = Array_getItemPointerByIndex(&faces, i);
+			Vec3f *vertex_p = Array_getItemPointerByIndex(&vertices, face_p->indices[j]);
 
-			for(int j = 0; j < 3; j++){
+			mesh[i * 3 + j] = *vertex_p;
+		
+		}
+	
+	}
 
-				Vec3f *vertex_p = Array_getItemPointerByIndex(&vertices, face_p->indices[j]);
+	//free data
+	Array_free(&vertices);
+	Array_free(&faces);
+	free(data);
 
-				mesh[i * 6 + j * 2] = *vertex_p;
-			
+	//return output
+	*numberOfTrianglesOut_p = faces.length;
+
+	/*
+	printf("\n");
+	for(int i = 0; i < faces.length * 3; i++){
+		if(i % 3 == 0){
+			printf("%i\n", i / 3);
+		}
+		Vec3f_log(mesh[i]);
+	}
+	printf("\n");
+	*/
+
+	return mesh;
+
+}
+
+void Model_initFromFile_obj(Model *model_p, char *path){
+
+	//read vertices and indices
+	long int fileSize;
+	char *data = getFileData_mustFree(path, &fileSize);
+
+	Array vertices;
+	Array faces;
+
+	Array_init(&vertices, sizeof(Vec3f));
+	Array_init(&faces, sizeof(Face));
+
+	for(int i = 0; i < fileSize; i++){
+
+		if(i == 0
+		|| data[i - 1] == *"\n"){
+
+			if(data[i] == *"v"){
+
+				Vec3f *vertex_p = Array_addItem(&vertices);
+
+				char *next_p;
+
+				vertex_p->x = strtof(data + i + 1, &next_p);
+				vertex_p->y = strtof(next_p + 1, &next_p);
+				vertex_p->z = strtof(next_p + 1, &next_p);
+
 			}
 
-			Vec3f normal = getCrossVec3f(
-				getSubVec3f(mesh[i * 6 + 0], mesh[i * 6 + 2]),
-				getSubVec3f(mesh[i * 6 + 0], mesh[i * 6 + 4])
-			);
+			if(data[i] == *"f"){
 
-			for(int j = 0; j < 3; j++){
-				mesh[i * 6 + j * 2 + 1] = normal;
+				Face *face_p = Array_addItem(&faces);
+
+				char *next_p;
+
+				face_p->indices[0] = strtol(data + i + 1, &next_p, 10) - 1;//-1 since it's stored as vertex's number
+				strtol(next_p + 1, &next_p, 10);
+				strtol(next_p + 1, &next_p, 10);
+				face_p->indices[1] = strtol(next_p + 1, &next_p, 10) - 1;
+				strtol(next_p + 1, &next_p, 10);
+				strtol(next_p + 1, &next_p, 10);
+				face_p->indices[2] = strtol(next_p + 1, &next_p, 10) - 1;
+				strtol(next_p + 1, &next_p, 10);
+				strtol(next_p + 1, &next_p, 10);
+
+				char *lastNext_p = next_p + 1;
+				strtol(next_p + 1, &next_p, 10);
+
+				if(lastNext_p != next_p){
+
+					Face *face2_p = Array_addItem(&faces);
+
+					face2_p->indices[2] = strtol(data + i + 1, &next_p, 10) - 1;
+					strtol(next_p + 1, &next_p, 10);
+					strtol(next_p + 1, &next_p, 10);
+					strtol(next_p + 1, &next_p, 10);
+					strtol(next_p + 1, &next_p, 10);
+					strtol(next_p + 1, &next_p, 10);
+
+					face2_p->indices[0] = strtol(next_p + 1, &next_p, 10) - 1;
+					strtol(next_p + 1, &next_p, 10);
+					strtol(next_p + 1, &next_p, 10);
+					face2_p->indices[1] = strtol(next_p + 1, &next_p, 10) - 1;
+
+				}
+
 			}
 		
 		}
 	}
-	if(numberOfFaceVertices == 4){
 
-		model_p->numberOfTriangles = 2 * faces.length;
+	//create mesh
+	Vec3f *mesh;
 
-		mesh = malloc(sizeof(Vec3f) * model_p->numberOfTriangles * 6);
-	
-		for(int i = 0; i < faces.length; i++){
+	model_p->numberOfTriangles = faces.length;
 
-			Face *face_p = Array_getItemPointerByIndex(&faces, i);
-			//printf("f\n");
+	mesh = malloc(sizeof(Vec3f) * model_p->numberOfTriangles * 6);
 
-			{
-				for(int j = 0; j < 3; j++){
+	for(int i = 0; i < faces.length; i++){
 
-					Vec3f *vertex_p = Array_getItemPointerByIndex(&vertices, face_p->indices[j]);
+		Face *face_p = Array_getItemPointerByIndex(&faces, i);
 
-					//printf("%i\n", face_p->indices[j]);
+		for(int j = 0; j < 3; j++){
 
-					//Vec3f_log(*vertex_p);
+			Vec3f *vertex_p = Array_getItemPointerByIndex(&vertices, face_p->indices[j]);
 
-					mesh[i * 12 + j * 2] = *vertex_p;
-				
-				}
-
-				Vec3f normal = getCrossVec3f(
-					getSubVec3f(mesh[i * 12 + 0], mesh[i * 12 + 2]),
-					getSubVec3f(mesh[i * 12 + 0], mesh[i * 12 + 4])
-				);
-
-				for(int j = 0; j < 3; j++){
-					mesh[i * 12 + j * 2 + 1] = normal;
-				}
-			}
-			{
-
-				for(int j = 0; j < 3; j++){
-
-					Vec3f *vertex_p = Array_getItemPointerByIndex(&vertices, face_p->indices[(2 + j) % 4]);
-
-					mesh[i * 12 + 6 + j * 2] = *vertex_p;
-				
-				}
-
-				Vec3f normal = getCrossVec3f(
-					getSubVec3f(mesh[i * 12 + 6 + 0], mesh[i * 12 + 6 + 2]),
-					getSubVec3f(mesh[i * 12 + 6 + 0], mesh[i * 12 + 6 + 4])
-				);
-
-				for(int j = 0; j < 3; j++){
-					mesh[i * 12 + 6 + j * 2 + 1] = normal;
-				}
-			}
-
+			mesh[i * 6 + j * 2] = *vertex_p;
+		
 		}
 
-	}
+		Vec3f normal = getCrossVec3f(
+			getSubVec3f(mesh[i * 6 + 0], mesh[i * 6 + 2]),
+			getSubVec3f(mesh[i * 6 + 0], mesh[i * 6 + 4])
+		);
 
-	//printf("%i\n", vertices.length);
+		for(int j = 0; j < 3; j++){
+			mesh[i * 6 + j * 2 + 1] = normal;
+		}
+	
+	}
 
 	//load gl buffers
 	glGenBuffers(1, &model_p->VBO);
@@ -197,6 +265,14 @@ void GL3D_uniformVec3f(unsigned int shaderProgram, char *locationName, Vec3f v){
 	unsigned int location = glGetUniformLocation(shaderProgram, locationName);
 
 	glUniform3f(location, v.x, v.y, v.z);
+
+}
+
+void GL3D_uniformVec4f(unsigned int shaderProgram, char *locationName, Vec4f v){
+
+	unsigned int location = glGetUniformLocation(shaderProgram, locationName);
+
+	glUniform4f(location, v.x, v.y, v.z, v.w);
 
 }
 

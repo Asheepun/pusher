@@ -1,9 +1,9 @@
-#version 100
+#version 330 core
 
-attribute vec2 vertexPosition_attribute;
-attribute vec2 textureVertex_attribute;
+layout (location = 0) in vec2 vertexPosition_attribute;
+layout (location = 1) in vec2 textureVertex_attribute;
 
-varying vec2 textureCoord;
+out vec2 textureCoord;
 
 uniform float posX;
 uniform float posY;
