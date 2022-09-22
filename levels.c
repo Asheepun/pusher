@@ -17,6 +17,11 @@
 void World_loadLevelFromFile(World *world_p, char *name){
 
 	Array_clear(&world_p->entities);
+	Array_clear(&world_p->lastEntities);
+	for(int i = 0; i < world_p->undos.length; i++){
+		Array_clear(Array_getItemPointerByIndex(&world_p->undos, i));
+	}
+	Array_clear(&world_p->undos);
 
 	char path[STRING_SIZE];
 	String_set(path, "levels/", STRING_SIZE);
@@ -73,6 +78,9 @@ void World_loadLevelFromFile(World *world_p, char *name){
 			color.z = strtof(next_p + 1, &next_p);
 			color.w = strtof(next_p + 1, &next_p);
 
+			char entityLevelName[STRING_SIZE];
+			String_set(entityLevelName, lines[i + 6], STRING_SIZE);
+
 #ifdef PRINT_STUFF_LEVELS
 			printf("entity!\n");
 			printf("pos:\n");
@@ -86,7 +94,8 @@ void World_loadLevelFromFile(World *world_p, char *name){
 
 			Model model = world_p->boxModel;
 
-			World_addEntity(world_p, pos, model, scale, entityType, color);
+			Entity *entity_p = World_addEntity(world_p, pos, model, scale, entityType, color);
+			String_set(entity_p->levelName, entityLevelName, STRING_SIZE);
 
 		}
 
@@ -132,8 +141,8 @@ void World_writeLevelToFile(World *world_p, char *name){
 		String_append(data, " ");
 		String_append_float(data, entity_p->color.w);
 		String_append(data, "\n");
-
-
+		String_append(data, entity_p->levelName);
+		String_append(data, "\n");
 
 	}
 

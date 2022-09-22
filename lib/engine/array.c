@@ -145,6 +145,19 @@ void Array_clear(Array *array_p){
 
 }
 
+Array Array_getCopy_mustFree(Array *array_p){
+	
+	Array newArray = *array_p;
+
+	newArray.items = malloc(array_p->itemSize * array_p->maxLength);
+
+	memcpy(newArray.items, array_p->items, array_p->itemSize * array_p->maxLength);
+
+	return newArray;
+
+
+}
+
 bool compareFloatToFloat(float a, float b){
 	return fabs(a - b) < 0.000001;
 }

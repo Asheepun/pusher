@@ -19,18 +19,23 @@ char *ENTITY_TYPE_NAMES[] = {
 	"sticky rock",
 	"obstacle",
 	"goal",
+	"level door",
 };
 
 enum CurrentEditingTool{
 	EDITING_TOOL_PLACE,
 	EDITING_TOOL_REMOVE,
+	EDITING_TOOL_EDIT,
 };
 
 IGUI_TextInputData levelNameInput;
+IGUI_TextInputData levelDoorNameInput;
 
 enum CurrentEditingTool currentEditingTool = EDITING_TOOL_PLACE;
 
 enum EntityType currentPlacingEntityType = ENTITY_TYPE_OBSTACLE;
+
+size_t currentEditingEntityID = -1;
 
 float MOVEMENT_SPEED = 0.4;
 
@@ -39,6 +44,9 @@ bool openingLevel = false;
 void World_initEditorState(World *world_p){
 
 	IGUI_TextInputData_init(&levelNameInput, world_p->currentLevel, strlen(world_p->currentLevel));
+	IGUI_TextInputData_init(&levelDoorNameInput, "", 0);
+
+	currentEditingEntityID = -1;
 
 	if(Engine_fpsModeOn){
 		Engine_setFPSMode(false);
@@ -57,6 +65,9 @@ void World_editorState(World *world_p){
 		if(IGUI_textButton_click("Place", getVec2f(50, 150), 60, currentEditingTool == EDITING_TOOL_PLACE)){
 			currentEditingTool = EDITING_TOOL_PLACE;
 		}
+		if(IGUI_textButton_click("Edit", getVec2f(50, 250), 60, currentEditingTool == EDITING_TOOL_EDIT)){
+			currentEditingTool = EDITING_TOOL_EDIT;
+		}
 
 		if(currentEditingTool == EDITING_TOOL_PLACE){
 
@@ -66,6 +77,20 @@ void World_editorState(World *world_p){
 				}
 			}
 			
+		}
+
+		if(currentEditingTool == EDITING_TOOL_EDIT
+		&& currentEditingEntityID != -1){
+
+			Entity *entity_p = Array_getItemPointerByID(&world_p->entities, currentEditingEntityID);
+
+			if(entity_p->type == ENTITY_TYPE_LEVEL_DOOR){
+
+				IGUI_textInput(getVec2f(300, 50), &levelDoorNameInput);
+
+				String_set(entity_p->levelName, levelDoorNameInput.text, STRING_SIZE);
+
+			}
 		}
 
 		//file gui
@@ -179,7 +204,8 @@ void World_editorState(World *world_p){
 
 	}
 
-	if(!levelNameInput.focused){
+	if(!levelNameInput.focused
+	&& !levelDoorNameInput.focused){
 
 		if(Engine_keys[ENGINE_KEY_G].downed){
 			world_p->gameState = GAME_STATE_LEVEL;
@@ -338,10 +364,25 @@ void World_editorState(World *world_p){
 				if(currentPlacingEntityType == ENTITY_TYPE_OBSTACLE){
 					World_addObstacle(world_p, getAddVec3f(closestEntityPos, closestNormal));
 				}
+				if(currentPlacingEntityType == ENTITY_TYPE_LEVEL_DOOR){
+					World_addLevelDoor(world_p, getAddVec3f(closestEntityPos, closestNormal));
+				}
 			}
 
 			if(currentEditingTool == EDITING_TOOL_REMOVE){
 				Array_removeItemByID(&world_p->entities, foundEntityID);
+			}
+
+			if(currentEditingTool == EDITING_TOOL_EDIT){
+	
+				Entity *entity_p = Array_getItemPointerByID(&world_p->entities, foundEntityID);
+				currentEditingEntityID = foundEntityID;
+
+				if(entity_p->type == ENTITY_TYPE_LEVEL_DOOR){
+					Engine_setFPSMode(false);
+					String_set(levelDoorNameInput.text, entity_p->levelName, STRING_SIZE);
+				}
+
 			}
 
 		}

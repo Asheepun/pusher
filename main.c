@@ -39,11 +39,14 @@ void Engine_start(){
 
 	Engine_setFPSMode(true);
 
+	//init world
 	{
 
 		Array_init(&world.entities, sizeof(Entity));
+		Array_init(&world.lastEntities, sizeof(Entity));
+		Array_init(&world.undos, sizeof(Array));
 
-		String_set(world.currentLevel, "level12", STRING_SIZE);
+		String_set(world.currentLevel, "levelhub", STRING_SIZE);
 	
 	}
 

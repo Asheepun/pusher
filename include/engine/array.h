@@ -49,6 +49,8 @@ void Array_removeItemByID(Array *, size_t);
 
 void Array_clear(Array *);
 
+Array Array_getCopy_mustFree(Array *);
+
 void initTmpArrays();
 
 void Array_addToTmpArrays(Array *);

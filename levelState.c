@@ -18,6 +18,8 @@ void World_initLevelState(World *world_p){
 
 void World_levelState(World *world_p){
 
+	bool didAction = false;
+
 	printf("---\n");
 
 	if(Engine_keys[ENGINE_KEY_G].downed){
@@ -25,9 +27,6 @@ void World_levelState(World *world_p){
 		World_initEditorState(world_p);
 		return;
 	}
-
-	world_p->cameraPos = getVec3f(0, 10.0, -10.0);
-	world_p->cameraRotation = getVec3f(M_PI / 2, -M_PI / 4, 0.0);
 
 	if(Engine_keys[ENGINE_KEY_R].downed){
 
@@ -56,15 +55,19 @@ void World_levelState(World *world_p){
 
 			if(Engine_keys[ENGINE_KEY_W].downed){
 				entity_p->velocity.z += 1.0;
+				didAction = true;
 			}
 			if(Engine_keys[ENGINE_KEY_S].downed){
 				entity_p->velocity.z -= 1.0;
+				didAction = true;
 			}
 			if(Engine_keys[ENGINE_KEY_A].downed){
 				entity_p->velocity.x -= 1.0;
+				didAction = true;
 			}
 			if(Engine_keys[ENGINE_KEY_D].downed){
 				entity_p->velocity.x += 1.0;
+				didAction = true;
 			}
 
 		}
@@ -553,18 +556,90 @@ void World_levelState(World *world_p){
 		if(numberOfGoals > 0
 		&& numberOfGoals == numberOfHitGoals){
 
-			for(int i = 0; i < sizeof(STORY_LEVEL_NAMES) / sizeof(char *); i++){
-				if(strcmp(world_p->currentLevel, STORY_LEVEL_NAMES[i]) == 0){
+			String_set(world_p->currentLevel, "levelhub", STRING_SIZE);
 
+			World_loadLevelFromFile(world_p, world_p->currentLevel);
 
-					String_set(world_p->currentLevel, STORY_LEVEL_NAMES[i + 1], STRING_SIZE);
+			return;
+
+		}
+	}
+
+	//check player collision with level doors
+	for(int i = 0; i < world_p->entities.length; i++){
+
+		Entity *entity1_p = Array_getItemPointerByIndex(&world_p->entities, i);
+
+		if(entity1_p->type == ENTITY_TYPE_PLAYER){
+			for(int j = 0; j < world_p->entities.length; j++){
+
+				Entity *entity2_p = Array_getItemPointerByIndex(&world_p->entities, j);
+
+				if(i != j
+				&& entity2_p->type == ENTITY_TYPE_LEVEL_DOOR
+				&& checkVec3fEquals(entity1_p->pos, entity2_p->pos)){
+
+					String_set(world_p->currentLevel, entity2_p->levelName, STRING_SIZE);
 
 					World_loadLevelFromFile(world_p, world_p->currentLevel);
 
 					return;
-				}
-			}
 
+				}
+
+			}
+		}
+
+	}
+
+
+	//handle undo
+	if(Engine_keys[ENGINE_KEY_Z].downed
+	&& world_p->undos.length > 0){
+		
+		Array_free(&world_p->entities);
+		Array_free(&world_p->lastEntities);
+
+		Array *undo_p = Array_getItemPointerByIndex(&world_p->undos, world_p->undos.length - 1);
+
+		world_p->entities = Array_getCopy_mustFree(undo_p);
+		world_p->lastEntities = Array_getCopy_mustFree(undo_p);
+
+		Array_free(undo_p);
+
+		Array_removeItemByIndex(&world_p->undos, world_p->undos.length - 1);
+
+	}
+
+	//add undo
+	if(didAction){
+
+		Array *undo_p = Array_addItem(&world_p->undos);
+
+		*undo_p = Array_getCopy_mustFree(&world_p->lastEntities);
+
+	}
+
+	//update last entities
+	{
+		Array_free(&world_p->lastEntities);
+
+		world_p->lastEntities = Array_getCopy_mustFree(&world_p->entities);
+	}
+
+	//update camera pos
+	world_p->cameraPos = getVec3f(0, 10.0, -10.0);
+	world_p->cameraRotation = getVec3f(M_PI / 2, -M_PI / 4, 0.0);
+
+	if(strcmp(world_p->currentLevel, "levelhub") == 0){
+		for(int i = 0; i < world_p->entities.length; i++){
+
+			Entity *entity_p = Array_getItemPointerByIndex(&world_p->entities, i);
+
+			if(entity_p->type == ENTITY_TYPE_PLAYER){
+				Vec3f_add(&world_p->cameraPos, entity_p->pos);
+			}
+		
 		}
 	}
 
