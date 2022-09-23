@@ -52,6 +52,11 @@ void World_initEditorState(World *world_p){
 		Engine_setFPSMode(false);
 	}
 
+	World_loadLevelFromFile(world_p, "CURRENT_WORKING_LEVEL");
+
+	world_p->cameraPos = getVec3f(0, 10.0, -10.0);
+	world_p->cameraRotation = getVec3f(M_PI / 2, -M_PI / 4, 0.0);
+
 }
 
 void World_editorState(World *world_p){
@@ -388,5 +393,7 @@ void World_editorState(World *world_p){
 		}
 	
 	}
+
+	World_writeLevelToFile(world_p, "CURRENT_WORKING_LEVEL");
 
 }

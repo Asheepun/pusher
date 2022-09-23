@@ -31,6 +31,44 @@ char *getFileData_mustFree(char *path, long int *fileSizeOut){
 
 }
 
+FileLine *getFileLines_mustFree(char *path, int *numberOfLines_out){
+
+	long int dataSize;
+
+	char *data = getFileData_mustFree(path, &dataSize);
+	
+	int numberOfLines = 1;
+	for(int i = 0; i < dataSize; i++){
+		if(data[i] == *"\n"){
+			numberOfLines++;
+		}
+	}
+
+	FileLine *lines = malloc(numberOfLines * sizeof(FileLine));
+	memset(lines, 0, numberOfLines * STRING_SIZE);
+
+	int currentLine = 0;
+	int currentChar = 0;
+	for(int i = 0; i < dataSize; i++){
+
+		if(data[i] == *"\n"){
+			currentLine++;
+			currentChar = 0;
+		}else{
+			lines[currentLine][currentChar] = data[i];
+			currentChar++;
+		}
+
+	}
+
+	free(data);
+
+	*numberOfLines_out = numberOfLines;
+
+	return lines;
+
+}
+
 void writeDataToFile(char *path, char *data_p, long int fileSize){
 
 	FILE *fileHandle = NULL;

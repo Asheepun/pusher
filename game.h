@@ -48,6 +48,11 @@ typedef struct Entity{
 	char levelName[STRING_SIZE];
 }Entity;
 
+typedef struct SaveData{
+	Vec3f playerPos;
+	Array completedLevels;
+}SaveData;
+
 typedef struct World{
 
 	Array entities;
@@ -72,6 +77,8 @@ typedef struct World{
 	int boxMeshNumberOfTriangles;
 
 	char currentLevel[STRING_SIZE];
+
+	SaveData saveData;
 
 }World;
 
@@ -153,5 +160,11 @@ void World_editorState(World *);
 void World_loadLevelFromFile(World *, char *);
 
 void World_writeLevelToFile(World *, char *);
+
+//FILE: saving.c
+
+void SaveData_load(SaveData *);
+
+void SaveData_write(SaveData *);
 
 #endif

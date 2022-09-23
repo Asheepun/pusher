@@ -30,7 +30,8 @@ void World_levelState(World *world_p){
 
 	if(Engine_keys[ENGINE_KEY_R].downed){
 
-		World_loadLevelFromFile(world_p, world_p->currentLevel);
+		//World_loadLevelFromFile(world_p, world_p->currentLevel);
+		World_loadLevelFromFile(world_p, "CURRENT_WORKING_LEVEL");
 	
 	}
 
@@ -579,11 +580,22 @@ void World_levelState(World *world_p){
 				&& entity2_p->type == ENTITY_TYPE_LEVEL_DOOR
 				&& checkVec3fEquals(entity1_p->pos, entity2_p->pos)){
 
-					String_set(world_p->currentLevel, entity2_p->levelName, STRING_SIZE);
+					/*
+					bool levelIsCompleted = false;
+					for(int k = 0; k < world_p->saveData.completedLevels.length; k++){
+						char *levelName = Array_getItemPointerByIndex(&world_p->saveData.completedLevels, k);
+					}
+					*/
 
-					World_loadLevelFromFile(world_p, world_p->currentLevel);
+					//if(!levelIsCompleted){
 
-					return;
+						String_set(world_p->currentLevel, entity2_p->levelName, STRING_SIZE);
+
+						World_loadLevelFromFile(world_p, world_p->currentLevel);
+
+						return;
+					
+					//}
 
 				}
 

@@ -16,6 +16,8 @@
 
 void World_loadLevelFromFile(World *world_p, char *name){
 
+	//printf("%s\n", name);
+
 	Array_clear(&world_p->entities);
 	Array_clear(&world_p->lastEntities);
 	for(int i = 0; i < world_p->undos.length; i++){
@@ -103,6 +105,9 @@ void World_loadLevelFromFile(World *world_p, char *name){
 
 	free(data);
 	free(lines);
+
+	//update current working level
+	World_writeLevelToFile(world_p, "CURRENT_WORKING_LEVEL");
 
 }
 

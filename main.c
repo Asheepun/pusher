@@ -39,6 +39,15 @@ void Engine_start(){
 
 	Engine_setFPSMode(true);
 
+	//init save data
+	{
+		world.saveData.playerPos = getVec3f(0.0, 0.0, 0.0);
+		Array_init(&world.saveData.completedLevels, STRING_SIZE);
+	}
+
+	SaveData_load(&world.saveData);
+
+
 	//init world
 	{
 
@@ -47,6 +56,16 @@ void Engine_start(){
 		Array_init(&world.undos, sizeof(Array));
 
 		String_set(world.currentLevel, "levelhub", STRING_SIZE);
+
+		for(int i = 0; i < world.entities.length; i++){
+
+			Entity *entity_p = Array_getItemPointerByIndex(&world.entities, i);
+
+			if(entity_p->type == ENTITY_TYPE_PLAYER){
+				entity_p->pos = world.saveData.playerPos;
+			}
+		
+		}
 	
 	}
 
