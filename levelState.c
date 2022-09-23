@@ -12,6 +12,36 @@
 
 void World_initLevelState(World *world_p){
 
+	if(strcmp(world_p->currentLevel, "levelhub") == 0){
+
+		for(int i = 0; i < world_p->entities.length; i++){
+
+			Entity *entity_p = Array_getItemPointerByIndex(&world_p->entities, i);
+
+			if(entity_p->type == ENTITY_TYPE_LEVEL_DOOR){
+
+				for(int j = 0; j < world_p->saveData.completedLevels.length; j++){
+
+					char *levelName = Array_getItemPointerByIndex(&world_p->saveData.completedLevels, j);
+					
+					if(strcmp(levelName, entity_p->levelName) == 0){
+						Array_removeItemByIndex(&world_p->entities, i);
+						i--;
+						break;
+					}
+
+				}
+			
+			}
+
+			if(entity_p->type == ENTITY_TYPE_PLAYER){
+				entity_p->pos = world_p->saveData.playerPos;
+			}
+
+		}
+
+	}
+
 	//Engine_setFPSMode(true);
 
 }
@@ -32,6 +62,7 @@ void World_levelState(World *world_p){
 
 		//World_loadLevelFromFile(world_p, world_p->currentLevel);
 		World_loadLevelFromFile(world_p, "CURRENT_WORKING_LEVEL");
+		World_initLevelState(world_p);
 	
 	}
 
@@ -557,9 +588,15 @@ void World_levelState(World *world_p){
 		if(numberOfGoals > 0
 		&& numberOfGoals == numberOfHitGoals){
 
+			char *completedLevelName = Array_addItem(&world_p->saveData.completedLevels);
+			String_set(completedLevelName, world_p->currentLevel, STRING_SIZE);
+			printf("%s\n", world_p->currentLevel);
+
 			String_set(world_p->currentLevel, "levelhub", STRING_SIZE);
 
 			World_loadLevelFromFile(world_p, world_p->currentLevel);
+
+			World_initLevelState(world_p);
 
 			return;
 
@@ -580,22 +617,16 @@ void World_levelState(World *world_p){
 				&& entity2_p->type == ENTITY_TYPE_LEVEL_DOOR
 				&& checkVec3fEquals(entity1_p->pos, entity2_p->pos)){
 
-					/*
-					bool levelIsCompleted = false;
-					for(int k = 0; k < world_p->saveData.completedLevels.length; k++){
-						char *levelName = Array_getItemPointerByIndex(&world_p->saveData.completedLevels, k);
-					}
-					*/
+					String_set(world_p->currentLevel, entity2_p->levelName, STRING_SIZE);
 
-					//if(!levelIsCompleted){
+					world_p->saveData.playerPos = entity1_p->pos;
 
-						String_set(world_p->currentLevel, entity2_p->levelName, STRING_SIZE);
+					World_initLevelState(world_p);
 
-						World_loadLevelFromFile(world_p, world_p->currentLevel);
+					World_loadLevelFromFile(world_p, world_p->currentLevel);
 
-						return;
-					
-					//}
+					return;
+				
 
 				}
 
