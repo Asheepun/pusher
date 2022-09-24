@@ -169,12 +169,14 @@ void Engine_update(float deltaTime){
 		Engine_toggleFullscreen();
 	}
 
+	/*
 	if(Engine_keys[ENGINE_KEY_V].downed){
 		currentViewMode++;
 	}
 	if(currentViewMode >= NUMBER_OF_VIEW_MODES){
 		currentViewMode = 0;
 	}
+	*/
 
 	world.cameraDirection.y = sin(world.cameraRotation.y);
 	world.cameraDirection.x = cos(world.cameraRotation.x) * cos(world.cameraRotation.y);

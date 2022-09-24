@@ -46,6 +46,7 @@ Entity *World_addEntity(World *world_p, Vec3f pos, Model model, float scale, enu
 	entity_p->rotation = getVec3f(0, 0, 0);
 
 	entity_p->targetType = ENTITY_TYPE_PLAYER;
+	String_set(entity_p->levelName, "filler", STRING_SIZE);
 
 	return entity_p;
 

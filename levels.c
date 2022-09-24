@@ -109,6 +109,8 @@ void World_loadLevelFromFile(World *world_p, char *name){
 	//update current working level
 	World_writeLevelToFile(world_p, "CURRENT_WORKING_LEVEL");
 
+	printf("loaded the level!\n");
+
 }
 
 void World_writeLevelToFile(World *world_p, char *name){
@@ -145,8 +147,13 @@ void World_writeLevelToFile(World *world_p, char *name){
 		String_append_float(data, entity_p->color.z);
 		String_append(data, " ");
 		String_append_float(data, entity_p->color.w);
+
 		String_append(data, "\n");
-		String_append(data, entity_p->levelName);
+		if(strcmp(entity_p->levelName, "") == 0){
+			String_append(data, "filler");
+		}else{
+			String_append(data, entity_p->levelName);
+		}
 		String_append(data, "\n");
 
 	}

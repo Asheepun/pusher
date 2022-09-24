@@ -52,6 +52,15 @@ void World_levelState(World *world_p){
 
 	printf("---\n");
 
+	printf("%i\n", world_p->entities.length);
+	for(int i = 0; i < world_p->entities.length; i++){
+
+		Entity *entity_p = Array_getItemPointerByIndex(&world_p->entities, i);
+
+		printf("%i, %i\n", i, entity_p->type);
+
+	}
+
 	if(Engine_keys[ENGINE_KEY_G].downed){
 		world_p->gameState = GAME_STATE_EDITOR;
 		World_initEditorState(world_p);
