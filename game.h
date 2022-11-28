@@ -17,6 +17,7 @@ enum EntityType{
 	ENTITY_TYPE_OBSTACLE,
 	ENTITY_TYPE_GOAL,
 	ENTITY_TYPE_LEVEL_DOOR,
+	ENTITY_TYPE_RISER,
 	NUMBER_OF_ENTITY_TYPES,
 };
 
@@ -93,7 +94,8 @@ static Vec4f PLAYER_COLOR = { 0.0, 0.0, 1.0, 1.0 };
 static Vec4f ROCK_COLOR = { 0.7, 0.7, 0.5, 1.0 };
 static Vec4f STICKY_ROCK_COLOR = { 0.2, 0.8, 0.2, 1.0 };
 static Vec4f OBSTACLE_COLOR = { 0.7, 0.5, 0.3, 1.0 };
-static Vec4f LEVEL_DOOR_COLOR = { 1.0, 1.0, 0.0, 0.5 };
+static Vec4f LEVEL_DOOR_COLOR = { 1.0, 1.0, 1.0, 0.5 };
+static Vec4f RISER_COLOR = { 1.0, 0.3, 0.3, 0.7 };
 static float GOAL_ALPHA = 0.5;
 
 static int WIDTH = 1920;
@@ -142,6 +144,8 @@ Entity *World_addGoal(World *, Vec3f, Vec4f, enum EntityType);
 Entity *World_addObstacle(World *, Vec3f);
 
 Entity *World_addLevelDoor(World *, Vec3f);
+
+Entity *World_addRiser(World *, Vec3f);
 
 //FILE: levelState.c
 

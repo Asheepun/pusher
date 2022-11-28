@@ -20,6 +20,7 @@ char *ENTITY_TYPE_NAMES[] = {
 	"obstacle",
 	"goal",
 	"level door",
+	"riser",
 };
 
 enum CurrentEditingTool{
@@ -371,6 +372,9 @@ void World_editorState(World *world_p){
 				}
 				if(currentPlacingEntityType == ENTITY_TYPE_LEVEL_DOOR){
 					World_addLevelDoor(world_p, getAddVec3f(closestEntityPos, closestNormal));
+				}
+				if(currentPlacingEntityType == ENTITY_TYPE_RISER){
+					World_addRiser(world_p, getAddVec3f(closestEntityPos, closestNormal));
 				}
 			}
 

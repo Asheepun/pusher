@@ -55,6 +55,7 @@ void Engine_start(){
 		Array_init(&world.lastEntities, sizeof(Entity));
 		Array_init(&world.undos, sizeof(Array));
 
+		//String_set(world.currentLevel, "riser2", STRING_SIZE);
 		String_set(world.currentLevel, "levelhub", STRING_SIZE);
 
 		for(int i = 0; i < world.entities.length; i++){

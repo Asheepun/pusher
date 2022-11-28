@@ -98,7 +98,13 @@ Entity *World_addLevelDoor(World *world_p, Vec3f pos){
 
 	Entity *entity_p = World_addEntity(world_p, pos, world_p->boxModel, 0.6, ENTITY_TYPE_LEVEL_DOOR, LEVEL_DOOR_COLOR);
 
-	String_set(entity_p->levelName, "", STRING_SIZE);
+	return entity_p;
+
+}
+
+Entity *World_addRiser(World *world_p, Vec3f pos){
+
+	Entity *entity_p = World_addEntity(world_p, pos, world_p->boxModel, 0.6, ENTITY_TYPE_RISER, RISER_COLOR);
 
 	return entity_p;
 

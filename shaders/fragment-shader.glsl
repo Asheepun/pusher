@@ -38,6 +38,10 @@ void main(){
 	vec4 color = color;
 	float alpha = color.w;
 
+	//color.x = fragmentPosition.x;
+	//color.y = fragmentPosition.y;
+	//color.z = 0;
+
 	float depth = abs(projectedPosition.z / 100.0);
 
 	float shadowMapDepth = texture(shadowMapTexture, vec2(0.5, 0.5) + lightProjectedPosition.xy / 2).x;

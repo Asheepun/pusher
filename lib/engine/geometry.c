@@ -204,6 +204,12 @@ float getMagVec3f(Vec3f v){
 	return sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
 }
 
+bool checkEqualsVec3f(Vec3f v1, Vec3f v2, float tolerance){
+	return fabs(v1.x - v2.x) < tolerance
+		&& fabs(v1.y - v2.y) < tolerance
+		&& fabs(v1.z - v2.z) < tolerance;
+}
+
 Vec3f getAddVec3f(Vec3f v1, Vec3f v2){
 	return getVec3f(v1.x + v2.x, v1.y + v2.y, v1.z + v2.z);
 }

@@ -97,6 +97,8 @@ void Vec3f_rotate(Vec3f *, float, float, float);
 
 float getMagVec3f(Vec3f);
 
+bool checkEqualsVec3f(Vec3f, Vec3f, float);
+
 Vec3f getAddVec3f(Vec3f, Vec3f);
 
 Vec3f getSubVec3f(Vec3f, Vec3f);
